@@ -3,8 +3,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardClient } from "@/components/dashboard-client";
+import { TableClient } from "@/components/table-client";
 import { AccountOverview } from "@/components/account-overview";
-import { BarChart3, TrendingUp, Users } from "lucide-react";
+import { BarChart3, TrendingUp, TableIcon, Users } from "lucide-react";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -37,6 +38,14 @@ export function DashboardTabs() {
         {/* Center tabs */}
         <TabsList className="h-9 bg-muted/60 rounded-lg p-1">
           <TabsTrigger
+            value="performance-table"
+            className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+          >
+            <TableIcon className="size-3.5" />
+            <span className="hidden sm:inline">Performance Table</span>
+            <span className="sm:hidden">Table</span>
+          </TabsTrigger>
+          <TabsTrigger
             value="daily-performance"
             className="gap-1.5 rounded-md px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
           >
@@ -59,6 +68,14 @@ export function DashboardTabs() {
       </header>
 
       {/* Content */}
+      <TabsContent
+        value="performance-table"
+        className="mt-0 flex-1 outline-none"
+      >
+        <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
+          <TableClient />
+        </main>
+      </TabsContent>
       <TabsContent
         value="daily-performance"
         className="mt-0 flex-1 outline-none"

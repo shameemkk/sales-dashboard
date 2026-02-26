@@ -131,6 +131,22 @@ export function getDailyPerformanceByDateRange(
   return totals;
 }
 
+export function getDailyPerformanceRows(
+  startDate: string,
+  endDate: string
+): DailyPerformance[] {
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  const rows: DailyPerformance[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const dateStr = cursor.toISOString().split("T")[0];
+    rows.push(getDailyPerformanceByDate(dateStr));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return rows;
+}
+
 export const emailAccounts: EmailAccount[] = [
   {
     id: "1",

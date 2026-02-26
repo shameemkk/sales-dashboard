@@ -109,11 +109,9 @@ function StatCard({
 export function DailyPerformance({
   startDate,
   endDate,
-  action,
 }: {
   startDate: string;
   endDate: string;
-  action?: React.ReactNode;
 }) {
   const isRange = startDate !== endDate;
   const data = isRange
@@ -188,34 +186,6 @@ export function DailyPerformance({
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            {isRange ? "Performance Summary" : "Daily Performance"}
-          </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {isRange
-              ? `${new Date(startDate + "T00:00:00").toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })} – ${new Date(endDate + "T00:00:00").toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })} (${rangeDays} day${rangeDays > 1 ? "s" : ""})`
-              : new Date(startDate + "T00:00:00").toLocaleDateString("en-US", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-          </p>
-        </div>
-        {action}
-      </div>
-
       {/* Quick KPI Banner */}
       <div className="rounded-xl border bg-linear-to-r from-blue-500/5 via-violet-500/5 to-emerald-500/5 dark:from-blue-500/10 dark:via-violet-500/10 dark:to-emerald-500/10 px-5 py-3.5">
         <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">

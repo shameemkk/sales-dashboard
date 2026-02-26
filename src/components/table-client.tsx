@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
-import { DailyPerformance } from "@/components/daily-performance";
+import { format, subDays } from "date-fns";
+import { DailyPerformanceTable } from "@/components/daily-performance-table";
 import { DateRangePicker } from "@/components/date-picker";
 
-export function DashboardClient() {
-  const [startDate, setStartDate] = useState<Date>(new Date());
-  const [endDate, setEndDate] = useState<Date>(new Date());
+export function TableClient() {
+  const today = new Date();
+  const [startDate, setStartDate] = useState<Date>(subDays(today, 6));
+  const [endDate, setEndDate] = useState<Date>(today);
 
   const start = format(startDate, "yyyy-MM-dd");
   const end = format(endDate, "yyyy-MM-dd");
@@ -17,7 +18,7 @@ export function DashboardClient() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">
-            {start !== end ? "Performance Summary" : "Daily Performance"}
+            Performance Table
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             {start !== end
@@ -45,7 +46,7 @@ export function DashboardClient() {
           onEndDateChange={setEndDate}
         />
       </div>
-      <DailyPerformance startDate={start} endDate={end} />
+      <DailyPerformanceTable startDate={start} endDate={end} />
     </>
   );
 }
