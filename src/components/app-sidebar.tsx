@@ -11,7 +11,8 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { BarChart3, TrendingUp, Users } from "lucide-react";
+import { TrendingUp, Users } from "lucide-react";
+import Image from "next/image";
 
 const sidebarItems = [
   { title: "Daily Performance", icon: TrendingUp, href: "#daily-performance" },
@@ -26,11 +27,11 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="#">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <BarChart3 className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-white dark:bg-black overflow-hidden">
+                  <Image src="/logo.jpg" alt="Logo" width={32} height={32} className="object-contain dark:invert" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Sales Dash</span>
+                  <span className="truncate font-semibold">Uparrowagency Sales</span>
                   <span className="truncate text-xs text-muted-foreground">Analytics</span>
                 </div>
               </a>

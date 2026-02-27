@@ -14,7 +14,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { logoutAction } from "@/app/actions";
-import { BarChart3, TrendingUp, TableIcon, Users, LogOut } from "lucide-react";
+import { TrendingUp, TableIcon, Users, LogOut } from "lucide-react";
+import Image from "next/image";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -43,11 +44,11 @@ export function DashboardTabs() {
       <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b bg-background/80 backdrop-blur-lg supports-backdrop-filter:bg-background/60 px-6 md:px-8">
         {/* Brand */}
         <div className="flex items-center gap-3">
-          <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-linear-to-br from-primary to-primary/80 text-primary-foreground shadow-sm">
-            <BarChart3 className="size-5" />
+          <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-white dark:bg-black overflow-hidden shadow-sm">
+            <Image src="/logo.jpg" alt="Logo" width={36} height={36} className="object-contain dark:invert" />
           </div>
           <div className="hidden sm:block">
-            <p className="font-bold text-base leading-tight">Sales Dash</p>
+            <p className="font-bold text-base leading-tight">Uparrowagency Sales</p>
             <p className="text-[11px] text-muted-foreground leading-tight">
               {getGreeting()}
             </p>

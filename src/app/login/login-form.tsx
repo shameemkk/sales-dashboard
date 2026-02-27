@@ -4,15 +4,8 @@ import { useActionState, useState } from "react";
 import { loginAction } from "@/app/actions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  BarChart3,
-  Loader2,
-  AlertCircle,
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Loader2, AlertCircle, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 
 interface LoginFormProps {
   urlError?: string;
@@ -35,13 +28,13 @@ export function LoginForm({ urlError }: LoginFormProps) {
         {/* Brand mark */}
         <div className="mb-10 flex flex-col items-center gap-4 text-center">
           <div className="relative">
-            <div className="flex aspect-square size-14 items-center justify-center rounded-2xl bg-linear-to-br from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/20">
-              <BarChart3 className="size-7" />
+            <div className="flex aspect-square size-14 items-center justify-center rounded-2xl bg-white dark:bg-black overflow-hidden shadow-lg">
+              <Image src="/logo.jpg" alt="Logo" width={56} height={56} className="object-contain dark:invert" />
             </div>
-            <div className="absolute -inset-1 rounded-2xl border border-primary/20" />
+            <div className="absolute -inset-1 rounded-2xl border border-border" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Sales Dash</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Uparrowagency Sales</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Sign in to your account
             </p>

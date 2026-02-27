@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sales Dashboard",
+  title: "Uparrowagency Sales",
   description: "Sales performance and account overview dashboard",
 };
 
