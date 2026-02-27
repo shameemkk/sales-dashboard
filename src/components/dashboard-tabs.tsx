@@ -7,7 +7,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardClient } from "@/components/dashboard-client";
 import { TableClient } from "@/components/table-client";
 import { AccountOverview } from "@/components/account-overview";
-import { BarChart3, TrendingUp, TableIcon, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { logoutAction } from "@/app/actions";
+import { BarChart3, TrendingUp, TableIcon, Users, LogOut } from "lucide-react";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -76,7 +83,20 @@ export function DashboardTabs() {
         </TabsList>
 
         {/* Actions */}
-        <ThemeToggle />
+        <div className="flex items-center gap-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <form action={logoutAction}>
+                <Button variant="ghost" size="icon" className="size-9" type="submit">
+                  <LogOut className="size-4" />
+                  <span className="sr-only">Sign out</span>
+                </Button>
+              </form>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Sign out</TooltipContent>
+          </Tooltip>
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* Content */}
