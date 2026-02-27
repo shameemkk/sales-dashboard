@@ -1,17 +1,56 @@
 "use client";
 
-import { useState } from "react";
-import { format, subDays } from "date-fns";
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { DailyPerformanceTable } from "@/components/daily-performance-table";
 import { DateRangePicker } from "@/components/date-picker";
+import { fetchDailyPerformanceRows } from "@/lib/supabase-data";
+import type { DailyPerformance } from "@/lib/data";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export function TableClient() {
-  const today = new Date();
-  const [startDate, setStartDate] = useState<Date>(subDays(today, 6));
-  const [endDate, setEndDate] = useState<Date>(today);
+interface TableClientProps {
+  startDate: Date;
+  endDate: Date;
+  onStartDateChange: (d: Date) => void;
+  onEndDateChange: (d: Date) => void;
+}
+
+export function TableClient({
+  startDate,
+  endDate,
+  onStartDateChange,
+  onEndDateChange,
+}: TableClientProps) {
+  const [rows, setRows] = useState<DailyPerformance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const start = format(startDate, "yyyy-MM-dd");
   const end = format(endDate, "yyyy-MM-dd");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchDailyPerformanceRows(start, end)
+      .then((data) => {
+        if (!cancelled) {
+          setRows(data);
+          setLoading(false);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message ?? "Failed to load data");
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [start, end]);
 
   return (
     <>
@@ -42,11 +81,18 @@ export function TableClient() {
         <DateRangePicker
           startDate={startDate}
           endDate={endDate}
-          onStartDateChange={setStartDate}
-          onEndDateChange={setEndDate}
+          onStartDateChange={onStartDateChange}
+          onEndDateChange={onEndDateChange}
         />
       </div>
-      <DailyPerformanceTable startDate={start} endDate={end} />
+
+      {loading ? (
+        <Skeleton className="h-96 w-full rounded-xl" />
+      ) : error ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : (
+        <DailyPerformanceTable rows={rows} startDate={start} endDate={end} />
+      )}
     </>
   );
 }

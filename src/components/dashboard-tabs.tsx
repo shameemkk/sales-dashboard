@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { subDays } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardClient } from "@/components/dashboard-client";
@@ -15,6 +17,16 @@ function getGreeting() {
 }
 
 export function DashboardTabs() {
+  const today = new Date();
+
+  // Daily Performance dates
+  const [dpStart, setDpStart] = useState<Date>(today);
+  const [dpEnd, setDpEnd] = useState<Date>(today);
+
+  // Performance Table dates
+  const [tableStart, setTableStart] = useState<Date>(subDays(today, 6));
+  const [tableEnd, setTableEnd] = useState<Date>(today);
+
   return (
     <Tabs
       defaultValue="daily-performance"
@@ -73,7 +85,12 @@ export function DashboardTabs() {
         className="mt-0 flex-1 outline-none"
       >
         <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
-          <TableClient />
+          <TableClient
+            startDate={tableStart}
+            endDate={tableEnd}
+            onStartDateChange={setTableStart}
+            onEndDateChange={setTableEnd}
+          />
         </main>
       </TabsContent>
       <TabsContent
@@ -81,7 +98,12 @@ export function DashboardTabs() {
         className="mt-0 flex-1 outline-none"
       >
         <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
-          <DashboardClient />
+          <DashboardClient
+            startDate={dpStart}
+            endDate={dpEnd}
+            onStartDateChange={setDpStart}
+            onEndDateChange={setDpEnd}
+          />
         </main>
       </TabsContent>
       <TabsContent

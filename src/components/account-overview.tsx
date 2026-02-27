@@ -1,80 +1,142 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { emailAccounts } from "@/lib/data";
 import { EmailAccountsTable } from "@/components/email-accounts-table";
 import { AnimatedCounter } from "@/components/animated-counter";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Mail, MessageSquare, Flame } from "lucide-react";
+import type { EmailAccount } from "@/lib/data";
+
+interface ApiMeta {
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapAccount(item: any): EmailAccount {
+  const sent: number = item.emails_sent_count ?? 0;
+  const replied: number = item.total_replied_count ?? 0;
+  return {
+    id: String(item.id),
+    email: item.email as string,
+    totalEmailsSent: sent,
+    totalReplies: replied,
+    replyRate: sent > 0 ? (replied / sent) * 100 : 0,
+    totalWarmupsSent: 0,
+    warmupEnabled: item.warmup_enabled === true,
+    dailyLimit: item.daily_limit ?? 0,
+    status: item.status === "Connected" ? "active" : "inactive",
+  };
+}
 
 export function AccountOverview() {
-  const accounts = emailAccounts;
+  const [accounts, setAccounts] = useState<EmailAccount[]>([]);
+  const [meta, setMeta] = useState<ApiMeta | null>(null);
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"" | "connected" | "not_connected">("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const totals = accounts.reduce(
-    (acc, account) => ({
-      emailsSent: acc.emailsSent + account.totalEmailsSent,
-      replies: acc.replies + account.totalReplies,
-      warmupsSent: acc.warmupsSent + account.totalWarmupsSent,
-    }),
-    { emailsSent: 0, replies: 0, warmupsSent: 0 }
-  );
+  // Debounce search input → search (400 ms)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchChange(value: string) {
+    setSearchInput(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(value);
+      setPage(1);
+    }, 400);
+  }
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const params = new URLSearchParams({ page: String(page) });
+    if (search) params.set("search", search);
+    if (statusFilter) params.set("status", statusFilter);
+
+    fetch(`/api/sender-emails?${params}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setAccounts((data.data ?? []).map(mapAccount));
+          setMeta(data.meta ?? null);
+          setLoading(false);
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [page, search, statusFilter]);
+
+  const totalAccounts = meta?.total ?? 0;
+  const warmupCount = accounts.filter((a) => a.warmupEnabled).length;
+  const totalEmailsSent = accounts.reduce((s, a) => s + a.totalEmailsSent, 0);
+  const totalReplies = accounts.reduce((s, a) => s + a.totalReplies, 0);
   const overallReplyRate =
-    totals.emailsSent > 0
-      ? ((totals.replies / totals.emailsSent) * 100).toFixed(1)
+    totalEmailsSent > 0
+      ? ((totalReplies / totalEmailsSent) * 100).toFixed(1)
       : "0.0";
-
-  const activeCount = accounts.filter((a) => a.status === "active").length;
-  const warmingCount = accounts.filter((a) => a.status === "warming").length;
 
   const summaryCards = [
     {
       title: "Total Accounts",
-      value: accounts.length,
-      sub: `${activeCount} active`,
+      value: totalAccounts,
+      sub: meta
+        ? `Page ${meta.current_page} of ${meta.last_page}`
+        : "Loading…",
       icon: Users,
       iconColor: "text-blue-500",
       bgColor: "bg-blue-500/10",
-      bar: { current: activeCount, max: accounts.length, color: "bg-blue-500" },
     },
     {
-      title: "Total Emails Sent",
-      value: totals.emailsSent,
-      sub: "Across all accounts",
+      title: "Emails Sent",
+      value: totalEmailsSent,
+      sub: "This page",
       icon: Mail,
       iconColor: "text-violet-500",
       bgColor: "bg-violet-500/10",
     },
     {
-      title: "Overall Reply Rate",
-      value: null,
+      title: "Reply Rate",
+      value: null as number | null,
       displayValue: `${overallReplyRate}%`,
-      sub: `${totals.replies.toLocaleString()} total replies`,
+      sub: `${totalReplies} replies · this page`,
       icon: MessageSquare,
       iconColor: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
-      bar: {
-        current: totals.replies,
-        max: totals.emailsSent,
-        color: "bg-emerald-500",
-      },
     },
     {
-      title: "Total Warmups Sent",
-      value: totals.warmupsSent,
-      sub: `${warmingCount} accounts warming`,
+      title: "Warmup Enabled",
+      value: warmupCount,
+      sub: `of ${accounts.length} on this page`,
       icon: Flame,
       iconColor: "text-amber-500",
       bgColor: "bg-amber-500/10",
-      bar: { current: warmingCount, max: accounts.length, color: "bg-amber-500" },
     },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Account Overview
-        </h2>
+        <h2 className="text-2xl font-bold tracking-tight">Account Overview</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
           All email accounts and their performance metrics
         </p>
@@ -99,35 +161,34 @@ export function AccountOverview() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold tabular-nums">
-                {card.value !== null ? (
+                {loading ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : card.value !== null ? (
                   <AnimatedCounter value={card.value} />
                 ) : (
                   card.displayValue
                 )}
               </div>
-              {card.bar && (
-                <div className="mt-2.5 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${card.bar.color} transition-all duration-700 ease-out`}
-                    style={{
-                      width: `${
-                        card.bar.max > 0
-                          ? (card.bar.current / card.bar.max) * 100
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground mt-1.5">
-                {card.sub}
-              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">{card.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <EmailAccountsTable accounts={accounts} />
+      {error ? (
+        <p className="text-sm text-destructive">{error}</p>
+      ) : (
+        <EmailAccountsTable
+          accounts={accounts}
+          meta={meta}
+          loading={loading}
+          searchInput={searchInput}
+          onSearchChange={handleSearchChange}
+          onPageChange={setPage}
+          statusFilter={statusFilter}
+          onStatusChange={(s: "" | "connected" | "not_connected") => { setStatusFilter(s); setPage(1); }}
+        />
+      )}
     </div>
   );
 }

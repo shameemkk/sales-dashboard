@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getDailyPerformanceRows, type DailyPerformance } from "@/lib/data";
+import type { DailyPerformance } from "@/lib/data";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -122,16 +122,14 @@ function formatDate(dateStr: string) {
 }
 
 export function DailyPerformanceTable({
+  rows,
   startDate,
   endDate,
 }: {
+  rows: DailyPerformance[];
   startDate: string;
   endDate: string;
 }) {
-  const rows = useMemo(
-    () => getDailyPerformanceRows(startDate, endDate),
-    [startDate, endDate]
-  );
 
   const [sortKey, setSortKey] = useState<SortKey | null>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");

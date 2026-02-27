@@ -1,10 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  getDailyPerformanceByDate,
-  getDailyPerformanceByDateRange,
-} from "@/lib/data";
+import type { DailyPerformance as DailyPerformanceData } from "@/lib/data";
 import { AnimatedCounter } from "@/components/animated-counter";
 import { MeetingFunnel } from "@/components/meeting-funnel";
 import {
@@ -107,30 +104,14 @@ function StatCard({
 }
 
 export function DailyPerformance({
-  startDate,
-  endDate,
+  data,
+  prev,
+  isRange,
 }: {
-  startDate: string;
-  endDate: string;
+  data: DailyPerformanceData;
+  prev: DailyPerformanceData;
+  isRange: boolean;
 }) {
-  const isRange = startDate !== endDate;
-  const data = isRange
-    ? getDailyPerformanceByDateRange(startDate, endDate)
-    : getDailyPerformanceByDate(startDate);
-
-  const prevStart = new Date(startDate + "T00:00:00");
-  const prevEnd = new Date(endDate + "T00:00:00");
-  const rangeDays =
-    Math.round(
-      (prevEnd.getTime() - prevStart.getTime()) / (1000 * 60 * 60 * 24)
-    ) + 1;
-  prevStart.setDate(prevStart.getDate() - rangeDays);
-  prevEnd.setDate(prevEnd.getDate() - rangeDays);
-  const prevStartStr = prevStart.toISOString().split("T")[0];
-  const prevEndStr = prevEnd.toISOString().split("T")[0];
-  const prev = isRange
-    ? getDailyPerformanceByDateRange(prevStartStr, prevEndStr)
-    : getDailyPerformanceByDate(prevStartStr);
 
   const emailStats = [
     {
