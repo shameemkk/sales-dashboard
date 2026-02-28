@@ -6,7 +6,9 @@ import { EmailAccountsTable } from "@/components/email-accounts-table";
 import { AnimatedCounter } from "@/components/animated-counter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Mail, MessageSquare, Flame } from "lucide-react";
-import type { EmailAccount } from "@/lib/data";
+import type { EmailAccount, Tag } from "@/lib/data";
+
+export type TagFilterMode = "" | "has_tags" | "no_tags" | "exclude_tags";
 
 interface ApiMeta {
   current_page: number;
@@ -19,6 +21,11 @@ interface ApiMeta {
 function mapAccount(item: any): EmailAccount {
   const sent: number = item.emails_sent_count ?? 0;
   const replied: number = item.total_replied_count ?? 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawTags: any[] = Array.isArray(item.tags) ? item.tags : [];
+  const tags: string[] = rawTags.map((t) =>
+    typeof t === "string" ? t : typeof t?.name === "string" ? t.name : String(t)
+  );
   return {
     id: String(item.id),
     email: item.email as string,
@@ -29,6 +36,7 @@ function mapAccount(item: any): EmailAccount {
     warmupEnabled: item.warmup_enabled === true,
     dailyLimit: item.daily_limit ?? 0,
     status: item.status === "Connected" ? "active" : "inactive",
+    tags,
   };
 }
 
@@ -42,6 +50,21 @@ export function AccountOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Tag filter state
+  const [tagFilterMode, setTagFilterMode] = useState<TagFilterMode>("");
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
+
+  // Fetch available tags once
+  useEffect(() => {
+    fetch("/api/tags")
+      .then((r) => r.json())
+      .then((data) => setTags(data.data ?? []))
+      .catch(() => {})
+      .finally(() => setTagsLoading(false));
+  }, []);
+
   // Debounce search input → search (400 ms)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function handleSearchChange(value: string) {
@@ -54,6 +77,14 @@ export function AccountOverview() {
   }
 
   useEffect(() => {
+    // Don't call the API when switching to a tag-selecting mode before any tag is chosen
+    if (
+      (tagFilterMode === "has_tags" || tagFilterMode === "exclude_tags") &&
+      selectedTagIds.length === 0
+    ) {
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -61,6 +92,15 @@ export function AccountOverview() {
     const params = new URLSearchParams({ page: String(page) });
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
+
+    // Tag filter params
+    if (tagFilterMode === "has_tags" && selectedTagIds.length > 0) {
+      selectedTagIds.forEach((id) => params.append("tag_ids[]", String(id)));
+    } else if (tagFilterMode === "no_tags") {
+      params.set("without_tags", "true");
+    } else if (tagFilterMode === "exclude_tags" && selectedTagIds.length > 0) {
+      selectedTagIds.forEach((id) => params.append("excluded_tag_ids[]", String(id)));
+    }
 
     fetch(`/api/sender-emails?${params}`)
       .then((res) => {
@@ -84,7 +124,14 @@ export function AccountOverview() {
     return () => {
       cancelled = true;
     };
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, tagFilterMode, selectedTagIds]);
+
+  function handleTagFilterModeChange(mode: TagFilterMode) {
+    setTagFilterMode(mode);
+    // Clear selected tags when switching to modes that don't need them
+    if (mode === "" || mode === "no_tags") setSelectedTagIds([]);
+    setPage(1);
+  }
 
   const totalAccounts = meta?.total ?? 0;
   const warmupCount = accounts.filter((a) => a.warmupEnabled).length;
@@ -187,6 +234,12 @@ export function AccountOverview() {
           onPageChange={setPage}
           statusFilter={statusFilter}
           onStatusChange={(s: "" | "connected" | "not_connected") => { setStatusFilter(s); setPage(1); }}
+          tags={tags}
+          tagsLoading={tagsLoading}
+          tagFilterMode={tagFilterMode}
+          selectedTagIds={selectedTagIds}
+          onTagFilterModeChange={handleTagFilterModeChange}
+          onSelectedTagIdsChange={(ids) => { setSelectedTagIds(ids); setPage(1); }}
         />
       )}
     </div>

@@ -6,10 +6,17 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") ?? "";
   const status = searchParams.get("status") ?? "";
 
+  const tagIds = searchParams.getAll("tag_ids[]");
+  const excludedTagIds = searchParams.getAll("excluded_tag_ids[]");
+  const withoutTags = searchParams.get("without_tags");
+
   const url = new URL("https://send.uparrowagency.com/api/sender-emails");
   url.searchParams.set("page", page);
   if (search) url.searchParams.set("search", search);
   if (status) url.searchParams.set("status", status);
+  tagIds.forEach((id) => url.searchParams.append("tag_ids[]", id));
+  excludedTagIds.forEach((id) => url.searchParams.append("excluded_tag_ids[]", id));
+  if (withoutTags === "true") url.searchParams.set("without_tags", "1");
 
   const res = await fetch(url.toString(), {
     headers: {

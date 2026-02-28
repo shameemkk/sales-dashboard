@@ -22,6 +22,14 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,8 +42,12 @@ import {
   ArrowUp,
   ArrowDown,
   Flame,
+  Tag as TagIcon,
+  ChevronDown,
+  SlidersHorizontal,
 } from "lucide-react";
-import type { EmailAccount } from "@/lib/data";
+import type { EmailAccount, Tag } from "@/lib/data";
+import type { TagFilterMode } from "@/components/account-overview";
 
 type SortField =
   | "email"
@@ -64,6 +76,12 @@ interface EmailAccountsTableProps {
   onPageChange: (page: number) => void;
   statusFilter: StatusFilter;
   onStatusChange: (s: StatusFilter) => void;
+  tags: Tag[];
+  tagsLoading: boolean;
+  tagFilterMode: TagFilterMode;
+  selectedTagIds: number[];
+  onTagFilterModeChange: (mode: TagFilterMode) => void;
+  onSelectedTagIdsChange: (ids: number[]) => void;
 }
 
 function getPageNumbers(current: number, last: number): (number | "...")[] {
@@ -295,9 +313,17 @@ export function EmailAccountsTable({
   onPageChange,
   statusFilter,
   onStatusChange,
+  tags,
+  tagsLoading,
+  tagFilterMode,
+  selectedTagIds,
+  onTagFilterModeChange,
+  onSelectedTagIdsChange,
 }: EmailAccountsTableProps) {
   const [sortBy, setSortBy] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [tagSearch, setTagSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const toggleSort = useCallback(
     (field: SortField) => {
@@ -346,7 +372,7 @@ export function EmailAccountsTable({
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <Mail className="h-4 w-4 text-primary" />
@@ -358,42 +384,249 @@ export function EmailAccountsTable({
               </CardDescription>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {/* Status filter */}
-            <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
-              {(
-                [
-                  { value: "", label: "All" },
-                  { value: "connected", label: "Active" },
-                  { value: "not_connected", label: "Inactive" },
-                ] as { value: StatusFilter; label: string }[]
-              ).map(({ value, label }) => (
+
+          {/* Toggle filters button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowFilters((v) => !v)}
+            className="h-9 gap-1.5 text-xs"
+          >
+            <SlidersHorizontal className="size-3.5" />
+            Filters
+            {(statusFilter !== "" || tagFilterMode !== "" || searchInput !== "") && (
+              <span className="size-1.5 rounded-full bg-primary" />
+            )}
+            <ChevronDown
+              className={`size-3 text-muted-foreground transition-transform duration-200 ${showFilters ? "rotate-180" : ""}`}
+            />
+          </Button>
+        </div>
+
+        {/* Collapsible filter panel */}
+        {showFilters && (
+          <>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center pt-3 border-t">
+              {/* Status filter */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+                    Status:{" "}
+                    <span className="font-semibold">
+                      {statusFilter === "" ? "All" : statusFilter === "connected" ? "Active" : "Inactive"}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-36">
+                  <DropdownMenuRadioGroup
+                    value={statusFilter}
+                    onValueChange={(v) => onStatusChange(v as StatusFilter)}
+                  >
+                    <DropdownMenuRadioItem value="">All</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="connected">Active</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="not_connected">Inactive</DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Search */}
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search by email…"
+                  value={searchInput}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            {/* Tag filter row */}
+            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+            <TagIcon className="size-3.5" />
+            Tags:
+          </div>
+
+          {/* Mode toggle — "Contains tags" and "Do not contain tags" open inline dropdowns */}
+          <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-1">
+            {/* Any */}
+            <button
+              onClick={() => onTagFilterModeChange("")}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                tagFilterMode === ""
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Any
+            </button>
+
+            {/* Contains tags */}
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) onTagFilterModeChange("has_tags");
+                else setTagSearch("");
+              }}
+            >
+              <DropdownMenuTrigger asChild>
                 <button
-                  key={value}
-                  onClick={() => onStatusChange(value)}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                    statusFilter === value
+                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                    tagFilterMode === "has_tags"
                       ? "bg-background shadow-sm text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {label}
+                  Contains tags
+                  {tagFilterMode === "has_tags" && selectedTagIds.length > 0 && (
+                    <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">
+                      {selectedTagIds.length}
+                    </span>
+                  )}
+                  <ChevronDown className="size-3 opacity-60" />
                 </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52 p-0">
+                <div className="flex items-center border-b px-2">
+                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                  <input
+                    className="flex h-8 w-full bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground"
+                    placeholder="Search tags…"
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {tagsLoading ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
+                  ) : (() => {
+                    const filtered = tags.filter((t) =>
+                      t.name.toLowerCase().includes(tagSearch.toLowerCase())
+                    );
+                    return filtered.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No tags found</div>
+                    ) : filtered.map((tag) => (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={selectedTagIds.includes(tag.id)}
+                        onCheckedChange={(checked) =>
+                          onSelectedTagIdsChange(
+                            checked
+                              ? [...selectedTagIds, tag.id]
+                              : selectedTagIds.filter((id) => id !== tag.id)
+                          )
+                        }
+                      >
+                        {tag.name}
+                      </DropdownMenuCheckboxItem>
+                    ));
+                  })()}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* No tags */}
+            <button
+              onClick={() => onTagFilterModeChange("no_tags")}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                tagFilterMode === "no_tags"
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              No tags
+            </button>
+
+            {/* Do not contain tags */}
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (open) onTagFilterModeChange("exclude_tags");
+                else setTagSearch("");
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={`inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                    tagFilterMode === "exclude_tags"
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Do not contain tags
+                  {tagFilterMode === "exclude_tags" && selectedTagIds.length > 0 && (
+                    <span className="rounded-full bg-destructive/10 px-1.5 text-[10px] font-semibold text-destructive">
+                      {selectedTagIds.length}
+                    </span>
+                  )}
+                  <ChevronDown className="size-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52 p-0">
+                <div className="flex items-center border-b px-2">
+                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                  <input
+                    className="flex h-8 w-full bg-transparent px-2 text-xs outline-none placeholder:text-muted-foreground"
+                    placeholder="Search tags…"
+                    value={tagSearch}
+                    onChange={(e) => setTagSearch(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {tagsLoading ? (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">Loading…</div>
+                  ) : (() => {
+                    const filtered = tags.filter((t) =>
+                      t.name.toLowerCase().includes(tagSearch.toLowerCase())
+                    );
+                    return filtered.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No tags found</div>
+                    ) : filtered.map((tag) => (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={selectedTagIds.includes(tag.id)}
+                        onCheckedChange={(checked) =>
+                          onSelectedTagIdsChange(
+                            checked
+                              ? [...selectedTagIds, tag.id]
+                              : selectedTagIds.filter((id) => id !== tag.id)
+                          )
+                        }
+                      >
+                        {tag.name}
+                      </DropdownMenuCheckboxItem>
+                    ));
+                  })()}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Active tag badges */}
+          {tagFilterMode === "has_tags" && selectedTagIds.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.filter((t) => selectedTagIds.includes(t.id)).map((t) => (
+                <Badge key={t.id} variant="outline" className="rounded-full px-2 py-0 text-[11px] bg-primary/5 border-primary/20 text-primary">
+                  {t.name}
+                </Badge>
               ))}
             </div>
-            {/* Search */}
-            <div className="relative w-full sm:w-56">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search by email…"
-                value={searchInput}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-9"
-              />
+          )}
+          {tagFilterMode === "exclude_tags" && selectedTagIds.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.filter((t) => selectedTagIds.includes(t.id)).map((t) => (
+                <Badge key={t.id} variant="outline" className="rounded-full px-2 py-0 text-[11px] bg-destructive/5 border-destructive/20 text-destructive">
+                  {t.name}
+                </Badge>
+              ))}
             </div>
-          </div>
+          )}
         </div>
+          </>
+        )}
       </CardHeader>
 
       <CardContent className="p-0">
@@ -403,6 +636,7 @@ export function EmailAccountsTable({
               <TableHead className="pl-6">
                 {sortableHeader("Email Account", "email")}
               </TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead className="text-right">
                 {sortableHeader("Emails Sent", "totalEmailsSent")}
               </TableHead>
@@ -425,6 +659,12 @@ export function EmailAccountsTable({
                   <TableCell className="pl-6">
                     <Skeleton className="h-4 w-48" />
                   </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Skeleton className="h-5 w-14 rounded-full" />
+                      <Skeleton className="h-5 w-14 rounded-full" />
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Skeleton className="h-4 w-12 ml-auto" />
                   </TableCell>
@@ -445,7 +685,7 @@ export function EmailAccountsTable({
             ) : sorted.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="py-12 text-center text-muted-foreground"
                 >
                   <div className="flex flex-col items-center gap-2">
@@ -470,6 +710,23 @@ export function EmailAccountsTable({
                         {account.email.charAt(0).toUpperCase()}
                       </div>
                       <span className="text-sm">{account.email}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {account.tags.length === 0 ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        account.tags.map((tag) => (
+                          <Badge
+                            key={tag}
+                            variant="outline"
+                            className="rounded-full px-2 py-0 text-[11px] font-medium bg-primary/5 border-primary/20 text-primary"
+                          >
+                            {tag}
+                          </Badge>
+                        ))
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-medium">

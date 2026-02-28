@@ -1,3 +1,8 @@
+export interface Tag {
+  id: number;
+  name: string;
+}
+
 export interface DailyPerformance {
   date: string;
   totalEmailsSent: number;
@@ -24,5 +29,6 @@ export interface EmailAccount {
   warmupEnabled: boolean;
   dailyLimit: number;
   status: "active" | "inactive" | "warming";
+  tags: string[];
 }
 
