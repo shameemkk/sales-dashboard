@@ -714,6 +714,9 @@ export function EmailAccountsTable({
               sorted.map((account) => {
                 const isExpanded = expandedId === account.id;
                 const accountStats = statsMap.get(account.id) ?? [];
+                const statsSent = accountStats.reduce((s, r) => s + r.sent, 0);
+                const statsReplied = accountStats.reduce((s, r) => s + r.replied, 0);
+                const statsReplyRate = statsSent > 0 ? (statsReplied / statsSent) * 100 : 0;
                 return (
                   <Fragment key={account.id}>
                     <TableRow className="group hover:bg-muted/30 transition-colors">
@@ -761,14 +764,14 @@ export function EmailAccountsTable({
                         </div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {(account.totalEmailsSent ?? 0).toLocaleString()}
+                        {statsLoading ? <span className="text-muted-foreground">—</span> : statsSent.toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {(account.totalReplies ?? 0).toLocaleString()}
+                        {statsLoading ? <span className="text-muted-foreground">—</span> : statsReplied.toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end">
-                          <ReplyRateBar rate={account.replyRate} />
+                          <ReplyRateBar rate={statsReplyRate} />
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
@@ -860,8 +863,6 @@ export function EmailAccountsTable({
 // ─── Daily Stats Panel ────────────────────────────────────────────────────────
 
 const STAT_COLS: { key: keyof AccountDailyStat; label: string }[] = [
-  { key: "sent",         label: "Sent" },
-  { key: "replied",      label: "Replied" },
   { key: "total_opens",  label: "Opens" },
   { key: "unique_opens", label: "Unique Opens" },
   { key: "interested",   label: "Interested" },
