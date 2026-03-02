@@ -1,5 +1,5 @@
-import { DashboardTabs } from "@/components/dashboard-tabs";
+import { DashboardTabsClient } from "@/components/dashboard-tabs-client";
 
 export default function Home() {
-  return <DashboardTabs />;
+  return <DashboardTabsClient />;
 }
