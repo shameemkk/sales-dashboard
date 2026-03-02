@@ -32,3 +32,26 @@ export interface EmailAccount {
   tags: string[];
 }
 
+export interface AccountDailyStat {
+  senderId: number;
+  statDate: string; // "YYYY-MM-DD"
+  sent: number;
+  replied: number;
+  totalOpens: number;
+  uniqueOpens: number;
+  unsubscribed: number;
+  bounced: number;
+  interested: number;
+}
+
+export interface SyncJob {
+  id: number;
+  statDate: string;
+  status: "running" | "completed" | "failed";
+  totalPages: number | null;
+  completedPages: number;
+  failedPages: { page: number; error: string }[];
+  startedAt: string;
+  completedAt: string | null;
+}
+

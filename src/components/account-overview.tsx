@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { subDays, format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmailAccountsTable } from "@/components/email-accounts-table";
 import { AnimatedCounter } from "@/components/animated-counter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Mail, MessageSquare, Flame } from "lucide-react";
-import type { EmailAccount, Tag } from "@/lib/data";
+import { DateRangePicker } from "@/components/date-picker";
+import { SyncStatusPanel } from "@/components/sync-status-panel";
+import type { EmailAccount, Tag, AccountDailyStat } from "@/lib/data";
 
 export type TagFilterMode = "" | "has_tags" | "no_tags" | "exclude_tags";
 
@@ -56,6 +59,12 @@ export function AccountOverview() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [tagsLoading, setTagsLoading] = useState(true);
 
+  // Daily stats date range (default last 7 days)
+  const [statsStartDate, setStatsStartDate] = useState<Date>(() => subDays(new Date(), 6));
+  const [statsEndDate, setStatsEndDate] = useState<Date>(() => new Date());
+  const [statsMap, setStatsMap] = useState<Map<string, AccountDailyStat[]>>(new Map());
+  const [statsLoading, setStatsLoading] = useState(false);
+
   // Fetch available tags once
   useEffect(() => {
     fetch("/api/tags")
@@ -102,7 +111,7 @@ export function AccountOverview() {
       selectedTagIds.forEach((id) => params.append("excluded_tag_ids[]", String(id)));
     }
 
-    fetch(`/api/sender-emails?${params}`)
+    fetch(`/api/accounts?${params}`)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -125,6 +134,32 @@ export function AccountOverview() {
       cancelled = true;
     };
   }, [page, search, statusFilter, tagFilterMode, selectedTagIds]);
+
+  // Fetch daily stats for every account on the current page
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    const start = format(statsStartDate, "yyyy-MM-dd");
+    const end = format(statsEndDate, "yyyy-MM-dd");
+    let cancelled = false;
+    setStatsLoading(true);
+
+    Promise.all(
+      accounts.map((account) =>
+        fetch(`/api/account-stats?sender_id=${account.id}&start_date=${start}&end_date=${end}`)
+          .then((r) => (r.ok ? r.json() : { data: [] }))
+          .then((payload) => ({ id: account.id, rows: payload.data as AccountDailyStat[] }))
+          .catch(() => ({ id: account.id, rows: [] as AccountDailyStat[] }))
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      const map = new Map<string, AccountDailyStat[]>();
+      for (const { id, rows } of results) map.set(id, rows);
+      setStatsMap(map);
+      setStatsLoading(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [accounts, statsStartDate, statsEndDate]);
 
   function handleTagFilterModeChange(mode: TagFilterMode) {
     setTagFilterMode(mode);
@@ -189,6 +224,9 @@ export function AccountOverview() {
         </p>
       </div>
 
+      {/* Sync Status */}
+      <SyncStatusPanel />
+
       {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card) => (
@@ -222,6 +260,22 @@ export function AccountOverview() {
         ))}
       </div>
 
+      {/* Daily Stats Date Range */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-medium">Daily Stats Range</p>
+          <p className="text-xs text-muted-foreground">
+            Day-by-day breakdown shown when you expand an account row
+          </p>
+        </div>
+        <DateRangePicker
+          startDate={statsStartDate}
+          endDate={statsEndDate}
+          onStartDateChange={setStatsStartDate}
+          onEndDateChange={setStatsEndDate}
+        />
+      </div>
+
       {error ? (
         <p className="text-sm text-destructive">{error}</p>
       ) : (
@@ -240,6 +294,10 @@ export function AccountOverview() {
           selectedTagIds={selectedTagIds}
           onTagFilterModeChange={handleTagFilterModeChange}
           onSelectedTagIdsChange={(ids) => { setSelectedTagIds(ids); setPage(1); }}
+          statsMap={statsMap}
+          statsLoading={statsLoading}
+          statsStartDate={format(statsStartDate, "yyyy-MM-dd")}
+          statsEndDate={format(statsEndDate, "yyyy-MM-dd")}
         />
       )}
     </div>

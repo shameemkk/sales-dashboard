@@ -46,7 +46,8 @@ import {
   ChevronDown,
   SlidersHorizontal,
 } from "lucide-react";
-import type { EmailAccount, Tag } from "@/lib/data";
+import { Fragment } from "react";
+import type { EmailAccount, Tag, AccountDailyStat } from "@/lib/data";
 import type { TagFilterMode } from "@/components/account-overview";
 
 type SortField =
@@ -82,6 +83,10 @@ interface EmailAccountsTableProps {
   selectedTagIds: number[];
   onTagFilterModeChange: (mode: TagFilterMode) => void;
   onSelectedTagIdsChange: (ids: number[]) => void;
+  statsMap: Map<string, AccountDailyStat[]>;
+  statsLoading: boolean;
+  statsStartDate: string;
+  statsEndDate: string;
 }
 
 function getPageNumbers(current: number, last: number): (number | "...")[] {
@@ -319,11 +324,16 @@ export function EmailAccountsTable({
   selectedTagIds,
   onTagFilterModeChange,
   onSelectedTagIdsChange,
+  statsMap,
+  statsLoading,
+  statsStartDate,
+  statsEndDate,
 }: EmailAccountsTableProps) {
   const [sortBy, setSortBy] = useState<SortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [tagSearch, setTagSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleSort = useCallback(
     (field: SortField) => {
@@ -633,7 +643,8 @@ export function EmailAccountsTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="pl-6">
+              <TableHead className="w-10 pl-4" />
+              <TableHead className="pl-2">
                 {sortableHeader("Email Account", "email")}
               </TableHead>
               <TableHead>Tags</TableHead>
@@ -656,7 +667,8 @@ export function EmailAccountsTable({
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell className="pl-6">
+                  <TableCell className="pl-4 w-10" />
+                  <TableCell className="pl-2">
                     <Skeleton className="h-4 w-48" />
                   </TableCell>
                   <TableCell>
@@ -685,7 +697,7 @@ export function EmailAccountsTable({
             ) : sorted.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-12 text-center text-muted-foreground"
                 >
                   <div className="flex flex-col items-center gap-2">
@@ -699,59 +711,94 @@ export function EmailAccountsTable({
                 </TableCell>
               </TableRow>
             ) : (
-              sorted.map((account) => (
-                <TableRow
-                  key={account.id}
-                  className="group hover:bg-muted/30 transition-colors"
-                >
-                  <TableCell className="pl-6 font-medium">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-primary/5 text-xs font-bold text-primary ring-1 ring-primary/10">
-                        {account.email.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm">{account.email}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {account.tags.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        account.tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            className="rounded-full px-2 py-0 text-[11px] font-medium bg-primary/5 border-primary/20 text-primary"
-                          >
-                            {tag}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {account.totalEmailsSent.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {account.totalReplies.toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end">
-                      <ReplyRateBar rate={account.replyRate} />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center">
-                      <WarmupCell account={account} />
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center pr-6">
-                    <div className="flex justify-center">
-                      <StatusBadge status={account.status} />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              sorted.map((account) => {
+                const isExpanded = expandedId === account.id;
+                const accountStats = statsMap.get(account.id) ?? [];
+                return (
+                  <Fragment key={account.id}>
+                    <TableRow className="group hover:bg-muted/30 transition-colors">
+                      {/* Expand toggle */}
+                      <TableCell className="pl-4 w-10">
+                        <button
+                          onClick={() =>
+                            setExpandedId((prev) =>
+                              prev === account.id ? null : account.id
+                            )
+                          }
+                          className="flex items-center justify-center h-6 w-6 rounded hover:bg-muted transition-colors"
+                          aria-label={isExpanded ? "Collapse" : "Expand daily stats"}
+                        >
+                          <ChevronRight
+                            className={`size-4 text-muted-foreground transition-transform duration-200 ${
+                              isExpanded ? "rotate-90" : ""
+                            }`}
+                          />
+                        </button>
+                      </TableCell>
+                      <TableCell className="pl-2 font-medium">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-primary/5 text-xs font-bold text-primary ring-1 ring-primary/10">
+                            {account.email.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-sm">{account.email}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {account.tags.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          ) : (
+                            account.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="outline"
+                                className="rounded-full px-2 py-0 text-[11px] font-medium bg-primary/5 border-primary/20 text-primary"
+                              >
+                                {tag}
+                              </Badge>
+                            ))
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {account.totalEmailsSent.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {account.totalReplies.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end">
+                          <ReplyRateBar rate={account.replyRate} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <WarmupCell account={account} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center pr-6">
+                        <div className="flex justify-center">
+                          <StatusBadge status={account.status} />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Expandable daily stats row */}
+                    {isExpanded && (
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={8} className="p-0">
+                          <DailyStatsPanel
+                            stats={accountStats}
+                            loading={statsLoading}
+                            startDate={statsStartDate}
+                            endDate={statsEndDate}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -807,5 +854,107 @@ export function EmailAccountsTable({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Daily Stats Panel ────────────────────────────────────────────────────────
+
+const STAT_COLS: { key: keyof AccountDailyStat; label: string }[] = [
+  { key: "sent",         label: "Sent" },
+  { key: "replied",      label: "Replied" },
+  { key: "totalOpens",   label: "Opens" },
+  { key: "uniqueOpens",  label: "Unique Opens" },
+  { key: "interested",   label: "Interested" },
+  { key: "unsubscribed", label: "Unsub" },
+  { key: "bounced",      label: "Bounced" },
+];
+
+function DailyStatsPanel({
+  stats,
+  loading,
+  startDate,
+  endDate,
+}: {
+  stats: AccountDailyStat[];
+  loading: boolean;
+  startDate: string;
+  endDate: string;
+}) {
+  if (loading) {
+    return (
+      <div className="px-8 py-4 space-y-2">
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-3/4" />
+      </div>
+    );
+  }
+
+  if (stats.length === 0) {
+    return (
+      <div className="px-8 py-4 text-xs text-muted-foreground">
+        No stats synced for {startDate === endDate ? startDate : `${startDate} – ${endDate}`}.
+        Run a sync to populate data.
+      </div>
+    );
+  }
+
+  // Column totals
+  const totals = STAT_COLS.reduce(
+    (acc, { key }) => {
+      acc[key] = stats.reduce((sum, row) => sum + (row[key] as number), 0);
+      return acc;
+    },
+    {} as Partial<Record<keyof AccountDailyStat, number>>
+  );
+
+  return (
+    <div className="px-6 py-3">
+      <div className="overflow-x-auto rounded-lg border">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="bg-muted/50 border-b">
+              <th className="py-2 px-3 text-left font-medium text-muted-foreground whitespace-nowrap">
+                Date
+              </th>
+              {STAT_COLS.map(({ key, label }) => (
+                <th
+                  key={key}
+                  className="py-2 px-3 text-right font-medium text-muted-foreground whitespace-nowrap"
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {stats.map((row) => (
+              <tr key={row.statDate} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                <td className="py-2 px-3 font-medium tabular-nums whitespace-nowrap">
+                  {row.statDate}
+                </td>
+                {STAT_COLS.map(({ key }) => (
+                  <td key={key} className="py-2 px-3 text-right tabular-nums">
+                    {(row[key] as number).toLocaleString()}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-muted/50 border-t font-semibold">
+              <td className="py-2 px-3 text-xs uppercase tracking-wide text-muted-foreground">
+                Total
+              </td>
+              {STAT_COLS.map(({ key }) => (
+                <td key={key} className="py-2 px-3 text-right tabular-nums">
+                  {(totals[key] ?? 0).toLocaleString()}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
   );
 }
