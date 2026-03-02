@@ -143,20 +143,26 @@ export function AccountOverview() {
     let cancelled = false;
     setStatsLoading(true);
 
-    Promise.all(
-      accounts.map((account) =>
-        fetch(`/api/account-stats?sender_id=${account.id}&start_date=${start}&end_date=${end}`)
-          .then((r) => (r.ok ? r.json() : { data: [] }))
-          .then((payload) => ({ id: account.id, rows: payload.data as AccountDailyStat[] }))
-          .catch(() => ({ id: account.id, rows: [] as AccountDailyStat[] }))
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      const map = new Map<string, AccountDailyStat[]>();
-      for (const { id, rows } of results) map.set(id, rows);
-      setStatsMap(map);
-      setStatsLoading(false);
-    });
+    const ids = accounts.map((a) => a.id).join(",");
+
+    fetch(`/api/account-stats?ids=${ids}&start_date=${start}&end_date=${end}`)
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((payload) => {
+        if (cancelled) return;
+        const map = new Map<string, AccountDailyStat[]>();
+        for (const row of (payload.data as AccountDailyStat[])) {
+          const key = String(row.sender_id);
+          if (!map.has(key)) map.set(key, []);
+          map.get(key)!.push(row);
+        }
+        setStatsMap(map);
+        setStatsLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStatsMap(new Map());
+        setStatsLoading(false);
+      });
 
     return () => { cancelled = true; };
   }, [accounts, statsStartDate, statsEndDate]);
