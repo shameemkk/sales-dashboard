@@ -223,15 +223,15 @@ export function AccountOverview() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Account Overview</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          All email accounts and their performance metrics
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Account Overview</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            All email accounts and their performance metrics
+          </p>
+        </div>
+        <SyncStatusPanel />
       </div>
-
-      {/* Sync Status */}
-      <SyncStatusPanel />
 
       {/* Summary Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
