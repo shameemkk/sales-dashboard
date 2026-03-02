@@ -294,7 +294,7 @@ function WarmupCell({
               Daily Limit
             </p>
             <p className="text-xl font-bold tabular-nums">
-              {account.dailyLimit.toLocaleString()}
+              {(account.dailyLimit ?? 0).toLocaleString()}
             </p>
           </div>
 
@@ -761,10 +761,10 @@ export function EmailAccountsTable({
                         </div>
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {account.totalEmailsSent.toLocaleString()}
+                        {(account.totalEmailsSent ?? 0).toLocaleString()}
                       </TableCell>
                       <TableCell className="text-right tabular-nums font-medium">
-                        {account.totalReplies.toLocaleString()}
+                        {(account.totalReplies ?? 0).toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end">
@@ -862,8 +862,8 @@ export function EmailAccountsTable({
 const STAT_COLS: { key: keyof AccountDailyStat; label: string }[] = [
   { key: "sent",         label: "Sent" },
   { key: "replied",      label: "Replied" },
-  { key: "totalOpens",   label: "Opens" },
-  { key: "uniqueOpens",  label: "Unique Opens" },
+  { key: "total_opens",  label: "Opens" },
+  { key: "unique_opens", label: "Unique Opens" },
   { key: "interested",   label: "Interested" },
   { key: "unsubscribed", label: "Unsub" },
   { key: "bounced",      label: "Bounced" },
@@ -899,10 +899,12 @@ function DailyStatsPanel({
     );
   }
 
-  // Column totals
+  const isRange = startDate !== endDate;
+
+  // Column totals (used for range summary row and single-date footer)
   const totals = STAT_COLS.reduce(
     (acc, { key }) => {
-      acc[key] = stats.reduce((sum, row) => sum + (row[key] as number), 0);
+      acc[key] = stats.reduce((sum, row) => sum + ((row[key] as number) ?? 0), 0);
       return acc;
     },
     {} as Partial<Record<keyof AccountDailyStat, number>>
@@ -915,7 +917,7 @@ function DailyStatsPanel({
           <thead>
             <tr className="bg-muted/50 border-b">
               <th className="py-2 px-3 text-left font-medium text-muted-foreground whitespace-nowrap">
-                Date
+                {isRange ? "Date Range" : "Date"}
               </th>
               {STAT_COLS.map(({ key, label }) => (
                 <th
@@ -928,31 +930,32 @@ function DailyStatsPanel({
             </tr>
           </thead>
           <tbody>
-            {stats.map((row) => (
-              <tr key={row.statDate} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+            {isRange ? (
+              <tr className="border-b last:border-0">
                 <td className="py-2 px-3 font-medium tabular-nums whitespace-nowrap">
-                  {row.statDate}
+                  {startDate} – {endDate}
                 </td>
                 {STAT_COLS.map(({ key }) => (
                   <td key={key} className="py-2 px-3 text-right tabular-nums">
-                    {(row[key] as number).toLocaleString()}
+                    {(totals[key] ?? 0).toLocaleString()}
                   </td>
                 ))}
               </tr>
-            ))}
+            ) : (
+              stats.map((row, i) => (
+                <tr key={`${row.stat_date}-${i}`} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                  <td className="py-2 px-3 font-medium tabular-nums whitespace-nowrap">
+                    {row.stat_date}
+                  </td>
+                  {STAT_COLS.map(({ key }) => (
+                    <td key={key} className="py-2 px-3 text-right tabular-nums">
+                      {((row[key] as number) ?? 0).toLocaleString()}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
           </tbody>
-          <tfoot>
-            <tr className="bg-muted/50 border-t font-semibold">
-              <td className="py-2 px-3 text-xs uppercase tracking-wide text-muted-foreground">
-                Total
-              </td>
-              {STAT_COLS.map(({ key }) => (
-                <td key={key} className="py-2 px-3 text-right tabular-nums">
-                  {(totals[key] ?? 0).toLocaleString()}
-                </td>
-              ))}
-            </tr>
-          </tfoot>
         </table>
       </div>
     </div>

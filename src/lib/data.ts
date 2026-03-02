@@ -33,12 +33,12 @@ export interface EmailAccount {
 }
 
 export interface AccountDailyStat {
-  senderId: number;
-  statDate: string; // "YYYY-MM-DD"
+  sender_id: number;
+  stat_date: string; // "YYYY-MM-DD"
   sent: number;
   replied: number;
-  totalOpens: number;
-  uniqueOpens: number;
+  total_opens: number;
+  unique_opens: number;
   unsubscribed: number;
   bounced: number;
   interested: number;

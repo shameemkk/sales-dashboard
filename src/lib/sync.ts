@@ -7,6 +7,8 @@ function dbg(...args: any[]) {
   if (process.env.DEBUG === "TRUE") console.error(...args);
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 interface ExternalMetric {
   label: string;
   dates: [string, number][];
@@ -73,32 +75,38 @@ async function syncPage(accounts: any[], statDate: string, token: string): Promi
     .upsert(accountRows, { onConflict: "id" });
   if (accErr) throw new Error(`account upsert: ${accErr.message}`);
 
-  // Fetch campaign stats for each account concurrently
+  // Fetch stats for all accounts on this page in a single batched request
   const statsRows: ReturnType<typeof parseStatsResponse>[] = [];
-  await Promise.all(
-    accounts.map(async (item) => {
-      try {
-        const url = new URL(`${BASE_URL}/campaign-events/stats`);
-        url.searchParams.set("start_date", statDate);
-        url.searchParams.set("end_date", statDate);
-        url.searchParams.append("sender_email_ids[]", String(item.id));
+  if (accounts.length > 0) {
+    const results = await Promise.all(
+      accounts.map(async (item) => {
+        try {
+          const url = new URL(`${BASE_URL}/campaign-events/stats`);
+          url.searchParams.set("start_date", statDate);
+          url.searchParams.set("end_date", statDate);
+          url.searchParams.append("sender_email_ids[]", String(item.id));
 
-        const res = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          dbg(`[sync] stats API error for account ${item.id}: HTTP ${res.status}`);
-          return;
+          const res = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          });
+          if (!res.ok) {
+            dbg(`[sync] stats API error for ${item.id}: HTTP ${res.status}`);
+            return null;
+          }
+          const json = await res.json();
+          return parseStatsResponse(item.id as number, statDate, json.data ?? []);
+        } catch (err) {
+          dbg(`[sync] stats fetch error for ${item.id}:`, err instanceof Error ? err.message : err);
+          return null;
         }
+      })
+    );
 
-        const json = await res.json();
-        statsRows.push(parseStatsResponse(item.id as number, statDate, json.data ?? []));
-      } catch (err) {
-        dbg(`[sync] stats fetch error for account ${item.id}:`, err instanceof Error ? err.message : err);
-      }
-    })
-  );
+    for (const row of results) {
+      if (row) statsRows.push(row);
+    }
+  }
 
   if (statsRows.length > 0) {
     const { error: statsErr } = await supabaseBg
@@ -138,18 +146,10 @@ export async function runSyncJob(jobId: number, statDate: string): Promise<void>
     try {
       await syncPage(first.data ?? [], statDate, token);
       completedPages++;
-      await supabaseBg
-        .from("sync_jobs")
-        .update({ completed_pages: completedPages })
-        .eq("id", jobId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       dbg(`[sync] page 1 failed:`, msg);
       failedPages.push({ page: 1, error: msg });
-      await supabaseBg
-        .from("sync_jobs")
-        .update({ failed_pages: failedPages })
-        .eq("id", jobId);
     }
 
     // Process remaining pages sequentially
@@ -169,18 +169,18 @@ export async function runSyncJob(jobId: number, statDate: string): Promise<void>
 
         await syncPage(payload.data ?? [], statDate, token);
         completedPages++;
-        await supabaseBg
+        await sleep(200);
+
+        // Fire-and-forget progress update (non-blocking)
+        supabaseBg
           .from("sync_jobs")
           .update({ completed_pages: completedPages })
-          .eq("id", jobId);
+          .eq("id", jobId)
+          .then();
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         dbg(`[sync] page ${page} failed:`, msg);
         failedPages.push({ page, error: msg });
-        await supabaseBg
-          .from("sync_jobs")
-          .update({ failed_pages: failedPages })
-          .eq("id", jobId);
       }
     }
 
@@ -189,6 +189,7 @@ export async function runSyncJob(jobId: number, statDate: string): Promise<void>
       .update({
         status: failedPages.length > 0 ? "failed" : "completed",
         failed_pages: failedPages,
+        completed_pages: completedPages,
         completed_at: new Date().toISOString(),
       })
       .eq("id", jobId);
