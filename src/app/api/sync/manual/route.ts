@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { runSyncJob } from "@/lib/sync";
 
 export const runtime = "nodejs";
 
 // Triggered from the UI (no secret required — protected by Supabase session)
-export async function POST() {
+export async function POST(request: NextRequest) {
   const supabase = await createSupabaseServerClient();
 
   const { data: { session } } = await supabase.auth.getSession();
@@ -13,7 +13,11 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const statDate = new Date().toISOString().slice(0, 10);
+  const body = await request.json().catch(() => ({}));
+  const statDate: string =
+    typeof body?.stat_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.stat_date)
+      ? body.stat_date
+      : new Date().toISOString().slice(0, 10);
 
   const { data: job, error } = await supabase
     .from("sync_jobs")

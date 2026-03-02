@@ -17,6 +17,7 @@ export function SyncStatusPanel() {
   const [retrying, setRetrying] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [open, setOpen] = useState(false);
+  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
   const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -68,7 +69,11 @@ export function SyncStatusPanel() {
   async function handleTrigger() {
     setTriggering(true);
     try {
-      await fetch("/api/sync/manual", { method: "POST" });
+      await fetch("/api/sync/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stat_date: manualDate }),
+      });
       await fetchStatus();
       setOpen(true);
     } finally {
@@ -120,7 +125,7 @@ export function SyncStatusPanel() {
       <Button
         size="sm"
         variant="outline"
-        onClick={() => (job ? setOpen((v) => !v) : handleTrigger())}
+        onClick={() => setOpen((v) => !v)}
         disabled={triggering}
         className="h-8 gap-1.5 text-xs"
       >
@@ -138,84 +143,102 @@ export function SyncStatusPanel() {
       </Button>
 
       {/* Dropdown panel */}
-      {open && job && (
+      {open && (
         <div className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border bg-background shadow-lg p-3 space-y-2.5">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              {isRunning ? (
-                <Loader2 className="size-4 shrink-0 animate-spin text-blue-500" />
-              ) : hasFailures ? (
-                <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-              ) : (
-                <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+
+          {/* Last sync status */}
+          {job && (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  {isRunning ? (
+                    <Loader2 className="size-4 shrink-0 animate-spin text-blue-500" />
+                  ) : hasFailures ? (
+                    <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+                  ) : (
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                  )}
+                  <span className="text-sm font-medium">Sync {job.statDate}</span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    isRunning
+                      ? "border-blue-500/30 text-blue-600 dark:text-blue-400 text-[11px]"
+                      : hasFailures
+                      ? "border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px]"
+                      : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px]"
+                  }
+                >
+                  {isRunning ? "Running" : hasFailures ? "Partial" : "Completed"}
+                </Badge>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">{syncDate}</p>
+
+              {/* Progress bar */}
+              {job.totalPages !== null && (
+                <div className="space-y-1">
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${barClass}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {job.completedPages.toLocaleString()} / {job.totalPages.toLocaleString()} pages · {pct}%
+                  </p>
+                </div>
               )}
-              <span className="text-sm font-medium">Sync {job.statDate}</span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Badge
-                variant="outline"
-                className={
-                  isRunning
-                    ? "border-blue-500/30 text-blue-600 dark:text-blue-400 text-[11px]"
-                    : hasFailures
-                    ? "border-amber-500/30 text-amber-600 dark:text-amber-400 text-[11px]"
-                    : "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-[11px]"
-                }
-              >
-                {isRunning ? "Running" : hasFailures ? "Partial" : "Completed"}
-              </Badge>
+
+              {/* Failed pages */}
+              {hasFailures && (
+                <div className="flex items-center justify-between rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 gap-2">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 truncate">
+                    {failedCount} page{failedCount > 1 ? "s" : ""} failed:{" "}
+                    {job.failedPages.filter((f) => f.page > 0).slice(0, 5).map((f) => f.page).join(", ")}
+                    {failedCount > 5 ? ` +${failedCount - 5} more` : ""}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRetry}
+                    disabled={retrying || isRunning}
+                    className="h-7 shrink-0 gap-1 text-xs border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
+                  >
+                    {retrying ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              <div className="border-t" />
+            </>
+          )}
+
+          {/* Manual date sync */}
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Sync a date</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={manualDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setManualDate(e.target.value)}
+                className="flex-1 h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
               <Button
                 size="sm"
-                variant="ghost"
                 onClick={handleTrigger}
                 disabled={triggering || isRunning}
-                className="h-7 w-7 p-0"
-                title="Re-sync today"
+                className="h-8 gap-1.5 text-xs shrink-0"
               >
-                <RefreshCw className={`size-3 ${triggering ? "animate-spin" : ""}`} />
+                {triggering ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+                Run
               </Button>
             </div>
           </div>
 
-          {/* Timestamp */}
-          <p className="text-[11px] text-muted-foreground">{syncDate}</p>
-
-          {/* Progress bar */}
-          {job.totalPages !== null && (
-            <div className="space-y-1">
-              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${barClass}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                {job.completedPages.toLocaleString()} / {job.totalPages.toLocaleString()} pages · {pct}%
-              </p>
-            </div>
-          )}
-
-          {/* Failed pages */}
-          {hasFailures && (
-            <div className="flex items-center justify-between rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 gap-2">
-              <p className="text-xs text-amber-700 dark:text-amber-400 truncate">
-                {failedCount} page{failedCount > 1 ? "s" : ""} failed:{" "}
-                {job.failedPages.filter((f) => f.page > 0).slice(0, 5).map((f) => f.page).join(", ")}
-                {failedCount > 5 ? ` +${failedCount - 5} more` : ""}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleRetry}
-                disabled={retrying || isRunning}
-                className="h-7 shrink-0 gap-1 text-xs border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-              >
-                {retrying ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
-                Retry
-              </Button>
-            </div>
-          )}
         </div>
       )}
     </div>
