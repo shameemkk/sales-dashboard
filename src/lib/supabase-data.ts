@@ -73,19 +73,21 @@ export async function fetchDailyPerformanceRows(
   if (rowsCache.has(key)) return rowsCache.get(key)!;
   if (rowsInFlight.has(key)) return rowsInFlight.get(key)!;
 
-  const promise = supabase
-    .from("daily_performance")
-    .select("*")
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .order("date", { ascending: true })
-    .then(({ data, error }) => {
-      rowsInFlight.delete(key);
-      if (error) throw new Error(error.message);
-      const rows = (data ?? []).map(mapRow);
-      rowsCache.set(key, rows);
-      return rows;
-    });
+  const promise = Promise.resolve(
+    supabase
+      .from("daily_performance")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: true })
+      .then(({ data, error }) => {
+        rowsInFlight.delete(key);
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []).map(mapRow);
+        rowsCache.set(key, rows);
+        return rows;
+      })
+  );
 
   rowsInFlight.set(key, promise);
   return promise;
@@ -98,18 +100,20 @@ export async function fetchDailyPerformanceByDate(
   if (rangeCache.has(key)) return rangeCache.get(key)!;
   if (rangeInFlight.has(key)) return rangeInFlight.get(key)!;
 
-  const promise = supabase
-    .from("daily_performance")
-    .select("*")
-    .eq("date", date)
-    .maybeSingle()
-    .then(({ data, error }) => {
-      rangeInFlight.delete(key);
-      if (error) throw new Error(error.message);
-      const result = data ? mapRow(data as DbRow) : zeroPerformance(date);
-      rangeCache.set(key, result);
-      return result;
-    });
+  const promise = Promise.resolve(
+    supabase
+      .from("daily_performance")
+      .select("*")
+      .eq("date", date)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        rangeInFlight.delete(key);
+        if (error) throw new Error(error.message);
+        const result = data ? mapRow(data as DbRow) : zeroPerformance(date);
+        rangeCache.set(key, result);
+        return result;
+      })
+  );
 
   rangeInFlight.set(key, promise);
   return promise;
