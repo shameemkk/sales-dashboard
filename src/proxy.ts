@@ -31,10 +31,11 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname === "/login";
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/performance-sync");
 
-  // Not authenticated → send to /login
+  // Not authenticated → send to /login (skip API(/api/performance-sync) routes — they handle auth themselves)
   if (!user) {
-    if (isLoginPage) return response;
+    if (isLoginPage || isApiRoute) return response;
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
