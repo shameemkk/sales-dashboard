@@ -37,9 +37,6 @@ import {
   CalendarDays,
   Mail,
   MessageSquare,
-  TrendingUp,
-  TrendingDown,
-  Minus,
 } from "lucide-react";
 
 type SortKey = keyof DailyPerformance;
@@ -102,17 +99,6 @@ function DayOfWeekBadge({ dateStr }: { dateStr: string }) {
   );
 }
 
-function TrendIndicator({ current, avg }: { current: number; avg: number }) {
-  if (avg === 0) return null;
-  const pct = ((current - avg) / avg) * 100;
-  if (Math.abs(pct) < 5) return null;
-  const isUp = pct > 0;
-  return isUp ? (
-    <TrendingUp className="size-3 text-emerald-500" />
-  ) : (
-    <TrendingDown className="size-3 text-red-400" />
-  );
-}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
@@ -175,16 +161,13 @@ export function DailyPerformanceTable({
     return data;
   }, [rows, sortKey, sortDir]);
 
-  const stats = useMemo(() => {
-    const totals: Record<string, number> = {};
-    const avgs: Record<string, number> = {};
+  const totals = useMemo(() => {
+    const result: Record<string, number> = {};
     for (const col of COLUMNS) {
       if (col.key === "date") continue;
-      const values = rows.map((r) => r[col.key] as number);
-      totals[col.key] = values.reduce((s, v) => s + v, 0);
-      avgs[col.key] = rows.length > 0 ? totals[col.key] / rows.length : 0;
+      result[col.key] = rows.reduce((s, r) => s + (r[col.key] as number), 0);
     }
-    return { totals, avgs };
+    return result;
   }, [rows]);
 
   const activeCols = COLUMNS.filter((c) => visibleCols.has(c.key));
@@ -416,15 +399,9 @@ export function DailyPerformanceTable({
                           isFirstEmail || isFirstMeeting ? "border-l" : ""
                         }`}
                       >
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="min-w-[3ch] font-medium">
-                            {value.toLocaleString()}
-                          </span>
-                          <TrendIndicator
-                            current={value}
-                            avg={stats.avgs[col.key]}
-                          />
-                        </div>
+                        <span className="min-w-[3ch] font-medium">
+                          {value.toLocaleString()}
+                        </span>
                       </TableCell>
                     );
                   })}
@@ -451,33 +428,7 @@ export function DailyPerformanceTable({
                     >
                       {col.key === "date"
                         ? "Total"
-                        : stats.totals[col.key]?.toLocaleString() ?? ""}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
-              {/* Averages */}
-              <TableRow className="text-muted-foreground">
-                {activeCols.map((col) => {
-                  const isFirstEmail =
-                    col.group === "email" && emailCols[0]?.key === col.key;
-                  const isFirstMeeting =
-                    col.group === "meetings" && meetingCols[0]?.key === col.key;
-                  return (
-                    <TableCell
-                      key={col.key}
-                      className={`${col.key === "date" ? "pl-6 font-medium" : "text-right tabular-nums"} ${
-                        isFirstEmail || isFirstMeeting ? "border-l" : ""
-                      }`}
-                    >
-                      {col.key === "date" ? (
-                        <span className="flex items-center gap-1">
-                          <Minus className="size-3" />
-                          Avg / day
-                        </span>
-                      ) : (
-                        Math.round(stats.avgs[col.key]).toLocaleString()
-                      )}
+                        : totals[col.key]?.toLocaleString() ?? ""}
                     </TableCell>
                   );
                 })}
