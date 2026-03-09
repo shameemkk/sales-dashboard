@@ -89,7 +89,7 @@ function SyncHistoryPopover() {
   async function fetchHistory() {
     setLoading(true);
     try {
-      const res = await fetch("/api/sync/history");
+      const res = await fetch("/api/account-sync/history");
       if (!res.ok) return;
       const data: SyncJob[] = await res.json();
       setHistory(data);
@@ -199,7 +199,7 @@ export function SyncStatusPanel() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/sync/status");
+      const res = await fetch("/api/account-sync/status");
       if (!res.ok) return;
       const data: SyncJob | null = await res.json();
       setJob(data);
@@ -234,7 +234,7 @@ export function SyncStatusPanel() {
     if (!job) return;
     setRetrying(true);
     try {
-      await fetch("/api/sync/retry", {
+      await fetch("/api/account-sync/retry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_id: job.id }),
@@ -248,7 +248,7 @@ export function SyncStatusPanel() {
   async function handleTrigger() {
     setTriggering(true);
     try {
-      await fetch("/api/sync/manual", {
+      await fetch("/api/account-sync/manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stat_date: manualDateStr }),
