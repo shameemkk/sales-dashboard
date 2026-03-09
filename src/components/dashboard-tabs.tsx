@@ -27,9 +27,10 @@ function getGreeting() {
 export function DashboardTabs() {
   const today = new Date();
 
-  // Daily Performance dates
-  const [dpStart, setDpStart] = useState<Date>(today);
-  const [dpEnd, setDpEnd] = useState<Date>(today);
+  // Daily Performance dates — default to yesterday
+  const yesterday = subDays(today, 1);
+  const [dpStart, setDpStart] = useState<Date>(yesterday);
+  const [dpEnd, setDpEnd] = useState<Date>(yesterday);
 
   // Performance Table dates
   const [tableStart, setTableStart] = useState<Date>(subDays(today, 6));
