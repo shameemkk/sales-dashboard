@@ -15,9 +15,10 @@ import type { DailyPerformance } from "@/lib/data";
 
 interface MeetingFunnelProps {
   data: DailyPerformance;
+  totalPositiveReplies: number;
 }
 
-export function MeetingFunnel({ data }: MeetingFunnelProps) {
+export function MeetingFunnel({ data, totalPositiveReplies }: MeetingFunnelProps) {
   const overallRate =
     data.meetingsBooked > 0
       ? ((data.meetingsClosed / data.meetingsBooked) * 100).toFixed(0)
@@ -25,10 +26,25 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
 
   const maxVal = Math.max(data.meetingsBooked, 1);
 
+  const bookedRate = totalPositiveReplies > 0
+    ? ((data.meetingsBooked / totalPositiveReplies) * 100).toFixed(1)
+    : "0.0";
+  const showUpRate = data.meetingsBooked > 0
+    ? ((data.meetingsShowUp / data.meetingsBooked) * 100).toFixed(1)
+    : "0.0";
+  const closedRate = data.meetingsShowUp > 0
+    ? ((data.meetingsClosed / data.meetingsShowUp) * 100).toFixed(1)
+    : "0.0";
+  const noShowRate = data.meetingsBooked > 0
+    ? ((data.meetingsNoShow / data.meetingsBooked) * 100).toFixed(1)
+    : "0.0";
+
   const stages = [
     {
       label: "Booked",
       value: data.meetingsBooked,
+      rate: bookedRate,
+      rateLabel: "of positives",
       icon: CalendarCheck,
       color: "bg-blue-500",
       textColor: "text-blue-600 dark:text-blue-400",
@@ -37,6 +53,8 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
     {
       label: "Showed Up",
       value: data.meetingsShowUp,
+      rate: showUpRate,
+      rateLabel: "show up %",
       icon: CalendarCheck2,
       color: "bg-emerald-500",
       textColor: "text-emerald-600 dark:text-emerald-400",
@@ -45,6 +63,8 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
     {
       label: "Closed",
       value: data.meetingsClosed,
+      rate: closedRate,
+      rateLabel: "close %",
       icon: BadgeCheck,
       color: "bg-violet-500",
       textColor: "text-violet-600 dark:text-violet-400",
@@ -56,6 +76,7 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
     {
       label: "No-Show",
       value: data.meetingsNoShow,
+      rate: noShowRate,
       icon: CalendarX,
       iconColor: "text-red-500",
       bgColor: "bg-red-500/10",
@@ -108,6 +129,10 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
                 <div className="text-3xl font-bold tabular-nums">
                   <AnimatedCounter value={stage.value} />
                 </div>
+                <div className="text-[11px] text-muted-foreground">
+                  <span className={`font-semibold ${stage.textColor}`}>{stage.rate}%</span>
+                  <span> {stage.rateLabel}</span>
+                </div>
                 <div className="mx-auto max-w-[120px] h-2 rounded-full bg-muted overflow-hidden">
                   <div
                     className={`h-full rounded-full ${stage.color} transition-all duration-700 ease-out`}
@@ -136,6 +161,12 @@ export function MeetingFunnel({ data }: MeetingFunnelProps) {
               <div className="text-2xl font-bold tabular-nums">
                 <AnimatedCounter value={d.value} />
               </div>
+              {"rate" in d && (
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{d.rate}%</span>
+                  <span> of booked</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

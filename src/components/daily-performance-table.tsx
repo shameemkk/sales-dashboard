@@ -39,38 +39,90 @@ import {
   MessageSquare,
 } from "lucide-react";
 
-type SortKey = keyof DailyPerformance;
-type SortDir = "asc" | "desc";
+type DataKey = keyof DailyPerformance;
 
 interface ColumnDef {
-  key: SortKey;
+  key: string;
   label: string;
   group: "general" | "email" | "meetings";
+  dataKey?: DataKey;
+  compute?: (row: DailyPerformance) => number;
+  isPercent?: boolean;
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: "date", label: "Date", group: "general" },
-  { key: "totalEmailsSent", label: "Sent", group: "email" },
-  { key: "totalNewLeadsContacted", label: "New Leads", group: "email" },
-  { key: "totalReplies", label: "Replies", group: "email" },
-  { key: "totalPositiveReplies", label: "Positive", group: "email" },
-  { key: "totalAutoFollowUpSent", label: "Follow-ups", group: "email" },
-  { key: "meetingsBooked", label: "Booked", group: "meetings" },
-  { key: "meetingsShowUp", label: "Showed Up", group: "meetings" },
-  { key: "meetingsClosed", label: "Closed", group: "meetings" },
-  { key: "meetingsNoShow", label: "No-Show", group: "meetings" },
-  { key: "meetingsDisqualified", label: "Disqualified", group: "meetings" },
-  { key: "meetingsCanceled", label: "Canceled", group: "meetings" },
-  { key: "meetingsRescheduled", label: "Rescheduled", group: "meetings" },
+  { key: "date", label: "Date", group: "general", dataKey: "date" },
+  { key: "totalEmailsSent", label: "Sent", group: "email", dataKey: "totalEmailsSent" },
+  { key: "totalNewLeadsContacted", label: "New Leads", group: "email", dataKey: "totalNewLeadsContacted" },
+  { key: "totalReplies", label: "Replies", group: "email", dataKey: "totalReplies" },
+  {
+    key: "replyPct",
+    label: "Reply %",
+    group: "email",
+    isPercent: true,
+    compute: (r) => r.totalNewLeadsContacted > 0 ? (r.totalReplies / r.totalNewLeadsContacted) * 100 : 0,
+  },
+  { key: "totalPositiveReplies", label: "Positive", group: "email", dataKey: "totalPositiveReplies" },
+  {
+    key: "positivePct",
+    label: "Positive %",
+    group: "email",
+    isPercent: true,
+    compute: (r) => r.totalReplies > 0 ? (r.totalPositiveReplies / r.totalReplies) * 100 : 0,
+  },
+  { key: "totalAutoFollowUpSent", label: "Follow-ups", group: "email", dataKey: "totalAutoFollowUpSent" },
+  { key: "meetingsBooked", label: "Booked", group: "meetings", dataKey: "meetingsBooked" },
+  {
+    key: "bookedPct",
+    label: "Booked %",
+    group: "meetings",
+    isPercent: true,
+    compute: (r) => r.totalPositiveReplies > 0 ? (r.meetingsBooked / r.totalPositiveReplies) * 100 : 0,
+  },
+  { key: "meetingsShowUp", label: "Showed Up", group: "meetings", dataKey: "meetingsShowUp" },
+  {
+    key: "showUpPct",
+    label: "Show Up %",
+    group: "meetings",
+    isPercent: true,
+    compute: (r) => r.meetingsBooked > 0 ? (r.meetingsShowUp / r.meetingsBooked) * 100 : 0,
+  },
+  { key: "meetingsClosed", label: "Closed", group: "meetings", dataKey: "meetingsClosed" },
+  {
+    key: "closedPct",
+    label: "Closed %",
+    group: "meetings",
+    isPercent: true,
+    compute: (r) => r.meetingsShowUp > 0 ? (r.meetingsClosed / r.meetingsShowUp) * 100 : 0,
+  },
+  { key: "meetingsNoShow", label: "No-Show", group: "meetings", dataKey: "meetingsNoShow" },
+  {
+    key: "noShowPct",
+    label: "No Show %",
+    group: "meetings",
+    isPercent: true,
+    compute: (r) => r.meetingsBooked > 0 ? (r.meetingsNoShow / r.meetingsBooked) * 100 : 0,
+  },
+  { key: "meetingsDisqualified", label: "Disqualified", group: "meetings", dataKey: "meetingsDisqualified" },
+  { key: "meetingsCanceled", label: "Canceled", group: "meetings", dataKey: "meetingsCanceled" },
+  { key: "meetingsRescheduled", label: "Rescheduled", group: "meetings", dataKey: "meetingsRescheduled" },
 ];
+
+type SortDir = "asc" | "desc";
+
+function getCellValue(col: ColumnDef, row: DailyPerformance): string | number {
+  if (col.compute) return col.compute(row);
+  if (col.dataKey) return row[col.dataKey] as string | number;
+  return 0;
+}
 
 function SortIcon({
   column,
   sortKey,
   sortDir,
 }: {
-  column: SortKey;
-  sortKey: SortKey | null;
+  column: string;
+  sortKey: string | null;
   sortDir: SortDir;
 }) {
   if (sortKey !== column)
@@ -99,7 +151,6 @@ function DayOfWeekBadge({ dateStr }: { dateStr: string }) {
   );
 }
 
-
 function formatDate(dateStr: string) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
     month: "short",
@@ -116,23 +167,22 @@ export function DailyPerformanceTable({
   startDate: string;
   endDate: string;
 }) {
-
-  const [sortKey, setSortKey] = useState<SortKey | null>("date");
+  const [sortKey, setSortKey] = useState<string | null>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [visibleCols, setVisibleCols] = useState<Set<SortKey>>(
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(
     () => new Set(COLUMNS.map((c) => c.key))
   );
 
-  function handleSort(key: SortKey) {
+  function handleSort(key: string) {
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortKey(key);
-      setSortDir(key === "date" ? "desc" : "desc");
+      setSortDir("desc");
     }
   }
 
-  function toggleCol(key: SortKey) {
+  function toggleCol(key: string) {
     setVisibleCols((prev) => {
       const next = new Set(prev);
       if (next.has(key)) {
@@ -145,18 +195,21 @@ export function DailyPerformanceTable({
   }
 
   const sorted = useMemo(() => {
-    let data = [...rows];
+    const data = [...rows];
     if (sortKey) {
-      data.sort((a, b) => {
-        const av = a[sortKey];
-        const bv = b[sortKey];
-        if (typeof av === "string" && typeof bv === "string") {
-          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
-        }
-        return sortDir === "asc"
-          ? (av as number) - (bv as number)
-          : (bv as number) - (av as number);
-      });
+      const col = COLUMNS.find((c) => c.key === sortKey);
+      if (col) {
+        data.sort((a, b) => {
+          const av = getCellValue(col, a);
+          const bv = getCellValue(col, b);
+          if (typeof av === "string" && typeof bv === "string") {
+            return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+          }
+          return sortDir === "asc"
+            ? (av as number) - (bv as number)
+            : (bv as number) - (av as number);
+        });
+      }
     }
     return data;
   }, [rows, sortKey, sortDir]);
@@ -164,11 +217,22 @@ export function DailyPerformanceTable({
   const totals = useMemo(() => {
     const result: Record<string, number> = {};
     for (const col of COLUMNS) {
-      if (col.key === "date") continue;
-      result[col.key] = rows.reduce((s, r) => s + (r[col.key] as number), 0);
+      if (!col.dataKey || col.dataKey === "date") continue;
+      result[col.key] = rows.reduce((s, r) => s + (r[col.dataKey!] as number), 0);
     }
     return result;
   }, [rows]);
+
+  // Synthetic total row for computing aggregate percentages
+  const totalRow = useMemo(() => {
+    const r: Partial<DailyPerformance> = {};
+    for (const col of COLUMNS) {
+      if (col.dataKey && col.dataKey !== "date") {
+        (r as Record<string, unknown>)[col.dataKey] = totals[col.key] ?? 0;
+      }
+    }
+    return r as DailyPerformance;
+  }, [totals]);
 
   const activeCols = COLUMNS.filter((c) => visibleCols.has(c.key));
   const emailCols = activeCols.filter((c) => c.group === "email");
@@ -199,9 +263,9 @@ export function DailyPerformanceTable({
       .map((row) =>
         activeCols
           .map((c) => {
-            const val =
-              c.key === "date" ? formatDateForCsv(row.date) : row[c.key];
-            return escapeCsvCell(val);
+            if (c.key === "date") return escapeCsvCell(formatDateForCsv(row.date));
+            if (c.compute) return escapeCsvCell(c.compute(row).toFixed(1) + "%");
+            return escapeCsvCell(row[c.dataKey!] as number);
           })
           .join(",")
       )
@@ -321,7 +385,7 @@ export function DailyPerformanceTable({
             )}
             {/* Column header row */}
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              {activeCols.map((col, i) => {
+              {activeCols.map((col) => {
                 const isFirstEmail =
                   col.group === "email" && emailCols[0]?.key === col.key;
                 const isFirstMeeting =
@@ -331,7 +395,9 @@ export function DailyPerformanceTable({
                     key={col.key}
                     className={`cursor-pointer select-none hover:bg-muted/60 transition-colors ${
                       col.key === "date" ? "pl-6" : "text-right"
-                    } ${isFirstEmail || isFirstMeeting ? "border-l" : ""}`}
+                    } ${isFirstEmail || isFirstMeeting ? "border-l" : ""} ${
+                      col.isPercent ? "text-muted-foreground" : ""
+                    }`}
                     onClick={() => handleSort(col.key)}
                   >
                     <div
@@ -366,7 +432,7 @@ export function DailyPerformanceTable({
                 </TableCell>
               </TableRow>
             ) : (
-              sorted.map((row, idx) => (
+              sorted.map((row) => (
                 <TableRow
                   key={row.date}
                   className="group hover:bg-muted/30 transition-colors"
@@ -391,7 +457,23 @@ export function DailyPerformanceTable({
                       );
                     }
 
-                    const value = row[col.key] as number;
+                    if (col.compute) {
+                      const pct = col.compute(row);
+                      return (
+                        <TableCell
+                          key={col.key}
+                          className={`text-right tabular-nums ${
+                            isFirstEmail || isFirstMeeting ? "border-l" : ""
+                          }`}
+                        >
+                          <span className="text-muted-foreground text-[13px]">
+                            {pct.toFixed(1)}%
+                          </span>
+                        </TableCell>
+                      );
+                    }
+
+                    const value = row[col.dataKey!] as number;
                     return (
                       <TableCell
                         key={col.key}
@@ -412,7 +494,6 @@ export function DailyPerformanceTable({
 
           {sorted.length > 1 && (
             <TableFooter>
-              {/* Totals */}
               <TableRow className="font-semibold bg-muted/60">
                 {activeCols.map((col) => {
                   const isFirstEmail =
@@ -428,6 +509,8 @@ export function DailyPerformanceTable({
                     >
                       {col.key === "date"
                         ? "Total"
+                        : col.compute
+                        ? `${col.compute(totalRow).toFixed(1)}%`
                         : totals[col.key]?.toLocaleString() ?? ""}
                     </TableCell>
                   );

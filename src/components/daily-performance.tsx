@@ -4,75 +4,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DailyPerformance as DailyPerformanceData } from "@/lib/data";
 import { AnimatedCounter } from "@/components/animated-counter";
 import { MeetingFunnel } from "@/components/meeting-funnel";
-import {
-  Mail,
-  Users,
-  MessageSquare,
-  ThumbsUp,
-  RefreshCw,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-} from "lucide-react";
-
-function TrendBadge({
-  current,
-  previous,
-}: {
-  current: number;
-  previous: number;
-}) {
-  if (previous === 0) return null;
-  const diff = current - previous;
-  const pct = ((Math.abs(diff) / previous) * 100).toFixed(0);
-
-  if (diff === 0) {
-    return (
-      <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
-        <Minus className="size-3" />
-        0%
-      </span>
-    );
-  }
-
-  const isUp = diff > 0;
-  return (
-    <span
-      className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
-        isUp
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-red-500 dark:text-red-400"
-      }`}
-    >
-      {isUp ? (
-        <TrendingUp className="size-3" />
-      ) : (
-        <TrendingDown className="size-3" />
-      )}
-      {isUp ? "+" : "-"}
-      {pct}%
-    </span>
-  );
-}
+import { Mail, Users, MessageSquare, ThumbsUp, RefreshCw } from "lucide-react";
 
 interface StatCardProps {
   title: string;
   value: number;
-  prevValue?: number;
   icon: React.ElementType;
   iconColor?: string;
   bgColor?: string;
-  comparisonLabel?: string;
+  rate?: string;
+  rateLabel?: string;
 }
 
 function StatCard({
   title,
   value,
-  prevValue,
   icon: Icon,
   iconColor = "text-primary",
   bgColor = "bg-primary/10",
-  comparisonLabel = "vs yesterday",
+  rate,
+  rateLabel,
 }: StatCardProps) {
   return (
     <Card className="group hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
@@ -90,12 +41,10 @@ function StatCard({
         <div className="text-2xl font-bold tabular-nums">
           <AnimatedCounter value={value} />
         </div>
-        {prevValue !== undefined && (
-          <div className="flex items-center gap-1.5 mt-1">
-            <TrendBadge current={value} previous={prevValue} />
-            <span className="text-[11px] text-muted-foreground">
-              {comparisonLabel}
-            </span>
+        {rate !== undefined && (
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-foreground">{rate}%</span>
+            {rateLabel && <span> {rateLabel}</span>}
           </div>
         )}
       </CardContent>
@@ -105,8 +54,6 @@ function StatCard({
 
 export function DailyPerformance({
   data,
-  prev,
-  isRange,
 }: {
   data: DailyPerformanceData;
   prev: DailyPerformanceData;
@@ -117,7 +64,6 @@ export function DailyPerformance({
     {
       title: "Emails Sent",
       value: data.totalEmailsSent,
-      prevValue: prev.totalEmailsSent,
       icon: Mail,
       iconColor: "text-blue-500",
       bgColor: "bg-blue-500/10",
@@ -125,7 +71,6 @@ export function DailyPerformance({
     {
       title: "New Leads",
       value: data.totalNewLeadsContacted,
-      prevValue: prev.totalNewLeadsContacted,
       icon: Users,
       iconColor: "text-violet-500",
       bgColor: "bg-violet-500/10",
@@ -133,23 +78,28 @@ export function DailyPerformance({
     {
       title: "Replies",
       value: data.totalReplies,
-      prevValue: prev.totalReplies,
       icon: MessageSquare,
       iconColor: "text-cyan-500",
       bgColor: "bg-cyan-500/10",
+      rate: data.totalNewLeadsContacted > 0
+        ? ((data.totalReplies / data.totalNewLeadsContacted) * 100).toFixed(1)
+        : "0.0",
+      rateLabel: "reply %",
     },
     {
       title: "Positive Replies",
       value: data.totalPositiveReplies,
-      prevValue: prev.totalPositiveReplies,
       icon: ThumbsUp,
       iconColor: "text-green-500",
       bgColor: "bg-green-500/10",
+      rate: data.totalReplies > 0
+        ? ((data.totalPositiveReplies / data.totalReplies) * 100).toFixed(1)
+        : "0.0",
+      rateLabel: "positive %",
     },
     {
       title: "Follow-ups",
       value: data.totalAutoFollowUpSent,
-      prevValue: prev.totalAutoFollowUpSent,
       icon: RefreshCw,
       iconColor: "text-orange-500",
       bgColor: "bg-orange-500/10",
@@ -157,8 +107,8 @@ export function DailyPerformance({
   ];
 
   const replyRate =
-    data.totalEmailsSent > 0
-      ? ((data.totalReplies / data.totalEmailsSent) * 100).toFixed(1)
+    data.totalNewLeadsContacted > 0
+      ? ((data.totalReplies / data.totalNewLeadsContacted) * 100).toFixed(1)
       : "0.0";
   const positiveRate =
     data.totalReplies > 0
@@ -200,7 +150,6 @@ export function DailyPerformance({
             <StatCard
               key={stat.title}
               {...stat}
-              comparisonLabel={isRange ? "vs prior period" : "vs yesterday"}
             />
           ))}
         </div>
@@ -211,7 +160,7 @@ export function DailyPerformance({
         <h3 className="text-xs font-semibold text-muted-foreground mb-4 uppercase tracking-widest">
           Meeting Outcomes
         </h3>
-        <MeetingFunnel data={data} />
+        <MeetingFunnel data={data} totalPositiveReplies={data.totalPositiveReplies} />
       </section>
     </div>
   );
