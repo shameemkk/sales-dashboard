@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DailyPerformance as DailyPerformanceData } from "@/lib/data";
 import { AnimatedCounter } from "@/components/animated-counter";
 import { MeetingFunnel } from "@/components/meeting-funnel";
-import { Mail, Users, MessageSquare, ThumbsUp, RefreshCw } from "lucide-react";
+import { Mail, Users, MessageSquare, ThumbsUp } from "lucide-react";
 
 interface StatCardProps {
   title: string;
@@ -96,13 +96,6 @@ export function DailyPerformance({
         ? ((data.totalPositiveReplies / data.totalReplies) * 100).toFixed(1)
         : "0.0",
       rateLabel: "positive %",
-    },
-    {
-      title: "Follow-ups",
-      value: data.totalAutoFollowUpSent,
-      icon: RefreshCw,
-      iconColor: "text-orange-500",
-      bgColor: "bg-orange-500/10",
     },
   ];
 

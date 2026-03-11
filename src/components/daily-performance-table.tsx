@@ -70,8 +70,7 @@ const COLUMNS: ColumnDef[] = [
     isPercent: true,
     compute: (r) => r.totalReplies > 0 ? (r.totalPositiveReplies / r.totalReplies) * 100 : 0,
   },
-  { key: "totalAutoFollowUpSent", label: "Follow-ups", group: "email", dataKey: "totalAutoFollowUpSent" },
-  { key: "meetingsBooked", label: "Booked", group: "meetings", dataKey: "meetingsBooked" },
+{ key: "meetingsBooked", label: "Booked", group: "meetings", dataKey: "meetingsBooked" },
   {
     key: "bookedPct",
     label: "Booked %",

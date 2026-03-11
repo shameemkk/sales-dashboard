@@ -6,7 +6,7 @@ create table public.daily_performance (
   total_new_leads_contacted integer not null default 0,
   total_replies integer not null default 0,
   total_positive_replies integer not null default 0,
-  total_auto_follow_up_sent integer not null default 0,
+  -- total_auto_follow_up_sent integer not null default 0, -- removed
   meetings_booked integer not null default 0,
   meetings_no_show integer not null default 0,
   meetings_show_up integer not null default 0,

@@ -104,43 +104,6 @@ async function getWorkspacesStats(
   };
 }
 
-async function getFollowupEmailsSent(
-  startDate: string,
-  endDate: string
-): Promise<number> {
-  const first = await fetch(`${SEND_BASE}/campaigns?page=1`, {
-    headers: sendHeaders(),
-    cache: "no-store",
-  }).then((r) => r.json());
-
-  const lastPage: number = first.meta.last_page;
-  const allCampaigns: Array<{ id: number; type: string }> = [...first.data];
-
-  for (let page = 2; page <= lastPage; page++) {
-    const { data } = await fetch(`${SEND_BASE}/campaigns?page=${page}`, {
-      headers: sendHeaders(),
-      cache: "no-store",
-    }).then((r) => r.json());
-    allCampaigns.push(...data);
-  }
-
-  const followupIds = allCampaigns
-    .filter((c) => c.type === "reply_followup")
-    .map((c) => c.id);
-
-  let total = 0;
-  for (const id of followupIds) {
-    const { data } = await fetch(`${SEND_BASE}/campaigns/${id}/stats`, {
-      method: "POST",
-      headers: sendHeaders(),
-      body: JSON.stringify({ start_date: startDate, end_date: endDate }),
-      cache: "no-store",
-    }).then((r) => r.json());
-    total += data.emails_sent ?? 0;
-  }
-
-  return total;
-}
 
 async function getClosedMeetingCount(date: string): Promise<number> {
   const [year, month, day] = date.split("-");
@@ -211,7 +174,6 @@ export interface PerformanceSyncResult {
   total_new_leads_contacted: number;
   total_replies: number;
   total_positive_replies: number;
-  total_auto_follow_up_sent: number;
   meetings_booked: number;
   meetings_no_show: number;
   meetings_show_up: number;
@@ -231,10 +193,7 @@ export async function runPerformanceSync(
     getCampaigns(),
   ]);
 
-  const [stepIds, followupSent] = await Promise.all([
-    getSequenceSteps(campaignIds),
-    getFollowupEmailsSent(startDate, endDate),
-  ]);
+  const stepIds = await getSequenceSteps(campaignIds);
 
   const newLeadsContacted = await getCampaignStats(
     campaignIds,
@@ -261,7 +220,6 @@ export async function runPerformanceSync(
     total_new_leads_contacted: newLeadsContacted,
     total_replies: workspaceStats.replies,
     total_positive_replies: workspaceStats.positive_replies,
-    total_auto_follow_up_sent: followupSent,
     meetings_booked: calendar.booked,
     meetings_no_show: calendar.noshow,
     meetings_show_up: calendar.showed,

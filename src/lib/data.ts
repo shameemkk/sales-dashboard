@@ -9,7 +9,6 @@ export interface DailyPerformance {
   totalNewLeadsContacted: number;
   totalReplies: number;
   totalPositiveReplies: number;
-  totalAutoFollowUpSent: number;
   meetingsBooked: number;
   meetingsNoShow: number;
   meetingsShowUp: number;

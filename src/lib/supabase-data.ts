@@ -10,7 +10,6 @@ function mapRow(row: DbRow): DailyPerformance {
     totalNewLeadsContacted: (row.total_new_leads_contacted as number) ?? 0,
     totalReplies: (row.total_replies as number) ?? 0,
     totalPositiveReplies: (row.total_positive_replies as number) ?? 0,
-    totalAutoFollowUpSent: (row.total_auto_follow_up_sent as number) ?? 0,
     meetingsBooked: (row.meetings_booked as number) ?? 0,
     meetingsNoShow: (row.meetings_no_show as number) ?? 0,
     meetingsShowUp: (row.meetings_show_up as number) ?? 0,
@@ -28,7 +27,6 @@ function zeroPerformance(date: string): DailyPerformance {
     totalNewLeadsContacted: 0,
     totalReplies: 0,
     totalPositiveReplies: 0,
-    totalAutoFollowUpSent: 0,
     meetingsBooked: 0,
     meetingsNoShow: 0,
     meetingsShowUp: 0,
@@ -46,7 +44,6 @@ function sumRows(rows: DailyPerformance[], dateLabel: string): DailyPerformance 
     totals.totalNewLeadsContacted += r.totalNewLeadsContacted;
     totals.totalReplies += r.totalReplies;
     totals.totalPositiveReplies += r.totalPositiveReplies;
-    totals.totalAutoFollowUpSent += r.totalAutoFollowUpSent;
     totals.meetingsBooked += r.meetingsBooked;
     totals.meetingsNoShow += r.meetingsNoShow;
     totals.meetingsShowUp += r.meetingsShowUp;
