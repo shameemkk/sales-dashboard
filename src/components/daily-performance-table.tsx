@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { DailyPerformance } from "@/lib/data";
+import { getDefaultCols } from "@/lib/settings";
 import {
   ArrowUpDown,
   ArrowUp,
@@ -162,7 +163,7 @@ export function DailyPerformanceTable({
   const [sortKey, setSortKey] = useState<string | null>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
-    () => new Set(COLUMNS.map((c) => c.key))
+    () => getDefaultCols()
   );
 
   function handleSort(key: string) {

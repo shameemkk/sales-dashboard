@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardClient } from "@/components/dashboard-client";
 import { TableClient } from "@/components/table-client";
 import { AccountOverview } from "@/components/account-overview";
+import { SettingsPanel } from "@/components/settings-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -27,19 +28,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { logoutAction } from "@/app/actions";
-import { TrendingUp, TableIcon, Users, LogOut } from "lucide-react";
+import { TrendingUp, TableIcon, Users, LogOut, Settings } from "lucide-react";
 import Image from "next/image";
+import { getDefaultTableDays } from "@/lib/settings";
 
-type Section = "performance-table" | "daily-performance" | "account-overview";
+type Section = "performance-table" | "daily-performance" | "account-overview" | "settings";
 
 const navItems: {
   id: Section;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { id: "performance-table", label: "Performance Table", icon: TableIcon },
   { id: "daily-performance", label: "Daily Performance", icon: TrendingUp },
+  { id: "performance-table", label: "Performance Table", icon: TableIcon },
   { id: "account-overview", label: "Account Overview", icon: Users },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 function getGreeting() {
@@ -56,7 +59,9 @@ export function DashboardTabs() {
   const [active, setActive] = useState<Section>("daily-performance");
   const [dpStart, setDpStart] = useState<Date>(yesterday);
   const [dpEnd, setDpEnd] = useState<Date>(yesterday);
-  const [tableStart, setTableStart] = useState<Date>(subDays(today, 6));
+  const [tableStart, setTableStart] = useState<Date>(
+    () => subDays(today, getDefaultTableDays() - 1)
+  );
   const [tableEnd, setTableEnd] = useState<Date>(today);
 
   const activeLabel = navItems.find((n) => n.id === active)?.label ?? "";
@@ -103,7 +108,7 @@ export function DashboardTabs() {
                       isActive={active === item.id}
                       onClick={() => setActive(item.id)}
                       tooltip={item.label}
-                      className="py-3"
+                      className="py-3 group-data-[collapsible=icon]:justify-center"
                     >
                       <item.icon className="size-5 shrink-0" />
                       <span className="text-sm font-medium group-data-[collapsible=icon]:hidden">{item.label}</span>
@@ -145,7 +150,7 @@ export function DashboardTabs() {
           </div>
         </header>
 
-        {/* Performance Table — full width, no outer padding */}
+        {/* Performance Table — full width, small padding */}
         {active === "performance-table" && (
           <TableClient
             startDate={tableStart}
@@ -173,6 +178,9 @@ export function DashboardTabs() {
             <AccountOverview />
           </main>
         )}
+
+        {/* Settings */}
+        {active === "settings" && <SettingsPanel />}
       </SidebarInset>
     </>
   );

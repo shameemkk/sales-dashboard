@@ -27,6 +27,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
+const SIDEBAR_STORAGE_KEY = "sidebar_state"
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
@@ -84,6 +85,12 @@ function SidebarProvider({
 
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          SIDEBAR_STORAGE_KEY,
+          openState ? "expanded" : "collapsed"
+        )
+      }
     },
     [setOpenProp, open]
   )
@@ -108,6 +115,17 @@ function SidebarProvider({
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [toggleSidebar])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || openProp !== undefined) {
+      return
+    }
+
+    const storedState = window.localStorage.getItem(SIDEBAR_STORAGE_KEY)
+    if (storedState === "expanded" || storedState === "collapsed") {
+      _setOpen(storedState === "expanded")
+    }
+  }, [openProp, _setOpen])
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
