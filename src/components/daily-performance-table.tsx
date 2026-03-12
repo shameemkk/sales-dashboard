@@ -352,12 +352,13 @@ export function DailyPerformanceTable({
       </CardHeader>
 
       <CardContent className="p-0">
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             {/* Group header row */}
             {(emailCols.length > 0 || meetingCols.length > 0) && (
               <TableRow className="border-b-0 hover:bg-transparent">
-                <TableHead className="h-7" />
+                <TableHead className="h-7 sticky left-0 z-20 bg-background" />
                 {emailCols.length > 0 && (
                   <TableHead
                     colSpan={emailCols.length}
@@ -393,7 +394,7 @@ export function DailyPerformanceTable({
                   <TableHead
                     key={col.key}
                     className={`cursor-pointer select-none hover:bg-muted/60 transition-colors ${
-                      col.key === "date" ? "pl-6" : "text-right"
+                      col.key === "date" ? "pl-6 sticky left-0 z-20 bg-muted" : "text-right"
                     } ${isFirstEmail || isFirstMeeting ? "border-l" : ""} ${
                       col.isPercent ? "text-muted-foreground" : ""
                     }`}
@@ -445,7 +446,7 @@ export function DailyPerformanceTable({
 
                     if (col.key === "date") {
                       return (
-                        <TableCell key={col.key} className="pl-6">
+                        <TableCell key={col.key} className="pl-6 sticky left-0 z-10 bg-background group-hover:bg-muted/30 transition-colors">
                           <div className="flex items-center gap-2.5">
                             <DayOfWeekBadge dateStr={row.date} />
                             <span className="font-medium text-sm">
@@ -502,7 +503,7 @@ export function DailyPerformanceTable({
                   return (
                     <TableCell
                       key={col.key}
-                      className={`${col.key === "date" ? "pl-6 font-bold" : "text-right tabular-nums"} ${
+                      className={`${col.key === "date" ? "pl-6 font-bold sticky left-0 z-10 bg-muted" : "text-right tabular-nums"} ${
                         isFirstEmail || isFirstMeeting ? "border-l" : ""
                       }`}
                     >
@@ -518,6 +519,7 @@ export function DailyPerformanceTable({
             </TableFooter>
           )}
         </Table>
+        </div>
       </CardContent>
     </Card>
   );
