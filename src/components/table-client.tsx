@@ -54,7 +54,7 @@ export function TableClient({
 
   return (
     <>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-6 py-5 md:px-8 border-b">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">
             Performance Table
@@ -87,11 +87,15 @@ export function TableClient({
       </div>
 
       {loading ? (
-        <Skeleton className="h-96 w-full rounded-xl" />
+        <div className="px-6 py-6 md:px-8">
+          <Skeleton className="h-96 w-full rounded-xl" />
+        </div>
       ) : error ? (
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="px-6 py-4 md:px-8 text-sm text-destructive">{error}</p>
       ) : (
-        <DailyPerformanceTable rows={rows} startDate={start} endDate={end} />
+        <div className="px-4 py-4">
+          <DailyPerformanceTable rows={rows} startDate={start} endDate={end} />
+        </div>
       )}
     </>
   );

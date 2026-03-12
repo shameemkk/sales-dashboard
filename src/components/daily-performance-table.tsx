@@ -10,13 +10,6 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -279,19 +272,18 @@ export function DailyPerformanceTable({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 w-full">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-6 py-4 md:px-8 border-b">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
               <CalendarDays className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle className="text-base">Day-by-Day Breakdown</CardTitle>
-              <CardDescription>
+              <p className="text-base font-semibold">Day-by-Day Breakdown</p>
+              <p className="text-sm text-muted-foreground">
                 {rows.length} day{rows.length !== 1 ? "s" : ""} of performance
                 data
-              </CardDescription>
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -349,10 +341,8 @@ export function DailyPerformanceTable({
             </Button>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
+      <div className="w-full overflow-x-auto">
         <Table>
           <TableHeader>
             {/* Group header row */}
@@ -435,7 +425,7 @@ export function DailyPerformanceTable({
               sorted.map((row) => (
                 <TableRow
                   key={row.date}
-                  className="group hover:bg-muted/30 transition-colors"
+                  className="group hover:bg-muted transition-colors"
                 >
                   {activeCols.map((col) => {
                     const isFirstEmail =
@@ -446,7 +436,7 @@ export function DailyPerformanceTable({
 
                     if (col.key === "date") {
                       return (
-                        <TableCell key={col.key} className="pl-6 sticky left-0 z-10 bg-background group-hover:bg-muted/30 transition-colors">
+                        <TableCell key={col.key} className="pl-6 sticky left-0 z-10 bg-background group-hover:bg-muted transition-colors">
                           <div className="flex items-center gap-2.5">
                             <DayOfWeekBadge dateStr={row.date} />
                             <span className="font-medium text-sm">
@@ -520,7 +510,6 @@ export function DailyPerformanceTable({
           )}
         </Table>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

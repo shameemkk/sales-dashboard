@@ -30,7 +30,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <TooltipProvider>
-            <SidebarProvider>
+            <SidebarProvider style={{ "--sidebar-width": "13rem" } as React.CSSProperties}>
               {children}
             </SidebarProvider>
           </TooltipProvider>
