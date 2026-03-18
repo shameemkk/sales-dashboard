@@ -14,6 +14,7 @@ create table public.daily_performance (
   meetings_canceled integer not null default 0,
   meetings_rescheduled integer not null default 0,
   meetings_closed integer not null default 0,
+  marked_booking integer not null default 0,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

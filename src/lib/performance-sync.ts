@@ -130,8 +130,8 @@ async function getCalendarEventStats(date: string): Promise<{
   rescheduled: number;
   disqualified: number;
 }> {
-  const startTime = new Date(date + "T00:00:00").getTime();
-  const endTime = new Date(date + "T23:59:59.999").getTime();
+  const startTime = new Date(date + "T00:00:00-04:00").getTime();
+  const endTime = new Date(date + "T23:59:59.999-04:00").getTime();
 
   const url = new URL(`${LCH_BASE}/calendars/events`);
   url.searchParams.set("locationId", LCH_LOCATION_ID);
@@ -168,6 +168,36 @@ async function getCalendarEventStats(date: string): Promise<{
   return result;
 }
 
+async function getMarkedBookingCount(date: string): Promise<number> {
+  const startTime = new Date(date + "T00:00:00-04:00").getTime();
+  // endTime = 1 month from end of day
+  const endOfDay = new Date(date + "T23:59:59.999-04:00");
+  const endTime = new Date(endOfDay);
+  endTime.setMonth(endTime.getMonth() + 1);
+
+  const url = new URL(`${LCH_BASE}/calendars/events`);
+  url.searchParams.set("locationId", LCH_LOCATION_ID);
+  url.searchParams.set("startTime", String(startTime));
+  url.searchParams.set("endTime", String(endTime.getTime()));
+  url.searchParams.set("calendarId", LCH_CALENDAR_ID);
+
+  const { events = [] } = await fetch(url.toString(), {
+    headers: { ...lchHeaders(), Version: "2021-04-15" },
+    cache: "no-store",
+  }).then((r) => r.json());
+
+  // Count confirmed events whose dateAdded falls on `date`
+  let count = 0;
+  for (const e of events as Array<{ appointmentStatus?: string; dateAdded?: string }>) {
+    if ((e.appointmentStatus ?? "").toLowerCase() !== "confirmed") continue;
+    if (!e.dateAdded) continue;
+    const addedDate = e.dateAdded.slice(0, 10); // "YYYY-MM-DD"
+    if (addedDate === date) count++;
+  }
+
+  return count;
+}
+
 export interface PerformanceSyncResult {
   date: string;
   total_emails_sent: number;
@@ -181,6 +211,7 @@ export interface PerformanceSyncResult {
   meetings_canceled: number;
   meetings_rescheduled: number;
   meetings_closed: number;
+  marked_booking: number;
 }
 
 export async function runPerformanceSync(
@@ -206,15 +237,16 @@ export async function runPerformanceSync(
   const days = getDaysInRange(startDate, endDate);
   const perDayStats = await Promise.all(
     days.map(async (date) => {
-      const [closed, calendar] = await Promise.all([
+      const [closed, calendar, markedBooking] = await Promise.all([
         getClosedMeetingCount(date),
         getCalendarEventStats(date),
+        getMarkedBookingCount(date),
       ]);
-      return { date, closed, calendar };
+      return { date, closed, calendar, markedBooking };
     })
   );
 
-  const rows: PerformanceSyncResult[] = perDayStats.map(({ date, closed, calendar }) => ({
+  const rows: PerformanceSyncResult[] = perDayStats.map(({ date, closed, calendar, markedBooking }) => ({
     date,
     total_emails_sent: workspaceStats.emails_sent,
     total_new_leads_contacted: newLeadsContacted,
@@ -227,6 +259,7 @@ export async function runPerformanceSync(
     meetings_canceled: calendar.cancelled,
     meetings_rescheduled: calendar.rescheduled,
     meetings_closed: closed,
+    marked_booking: markedBooking,
   }));
 
   // Upsert into daily_performance

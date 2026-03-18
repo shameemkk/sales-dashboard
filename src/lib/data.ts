@@ -16,6 +16,7 @@ export interface DailyPerformance {
   meetingsCanceled: number;
   meetingsRescheduled: number;
   meetingsClosed: number;
+  markedBooking: number;
 }
 
 export interface EmailAccount {

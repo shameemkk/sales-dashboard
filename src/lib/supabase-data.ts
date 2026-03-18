@@ -17,6 +17,7 @@ function mapRow(row: DbRow): DailyPerformance {
     meetingsCanceled: (row.meetings_canceled as number) ?? 0,
     meetingsRescheduled: (row.meetings_rescheduled as number) ?? 0,
     meetingsClosed: (row.meetings_closed as number) ?? 0,
+    markedBooking: (row.marked_booking as number) ?? 0,
   };
 }
 
@@ -34,6 +35,7 @@ function zeroPerformance(date: string): DailyPerformance {
     meetingsCanceled: 0,
     meetingsRescheduled: 0,
     meetingsClosed: 0,
+    markedBooking: 0,
   };
 }
 
@@ -51,6 +53,7 @@ function sumRows(rows: DailyPerformance[], dateLabel: string): DailyPerformance 
     totals.meetingsCanceled += r.meetingsCanceled;
     totals.meetingsRescheduled += r.meetingsRescheduled;
     totals.meetingsClosed += r.meetingsClosed;
+    totals.markedBooking += r.markedBooking;
   }
   return totals;
 }

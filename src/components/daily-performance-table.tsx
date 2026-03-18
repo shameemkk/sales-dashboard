@@ -72,6 +72,7 @@ const COLUMNS: ColumnDef[] = [
     isPercent: true,
     compute: (r) => r.totalPositiveReplies > 0 ? (r.meetingsBooked / r.totalPositiveReplies) * 100 : 0,
   },
+  { key: "markedBooking", label: "Marked Booking", group: "meetings", dataKey: "markedBooking" },
   { key: "meetingsShowUp", label: "Showed Up", group: "meetings", dataKey: "meetingsShowUp" },
   {
     key: "showUpPct",
