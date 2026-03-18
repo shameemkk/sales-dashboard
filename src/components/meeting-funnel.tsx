@@ -20,29 +20,29 @@ interface MeetingFunnelProps {
 
 export function MeetingFunnel({ data, totalPositiveReplies }: MeetingFunnelProps) {
   const overallRate =
-    data.meetingsBooked > 0
-      ? ((data.meetingsClosed / data.meetingsBooked) * 100).toFixed(0)
+    data.todayAppointments > 0
+      ? ((data.meetingsClosed / data.todayAppointments) * 100).toFixed(0)
       : "0";
 
-  const maxVal = Math.max(data.meetingsBooked, 1);
+  const maxVal = Math.max(data.todayAppointments, 1);
 
   const bookedRate = totalPositiveReplies > 0
-    ? ((data.meetingsBooked / totalPositiveReplies) * 100).toFixed(1)
+    ? ((data.todayAppointments / totalPositiveReplies) * 100).toFixed(1)
     : "0.0";
-  const showUpRate = data.meetingsBooked > 0
-    ? ((data.meetingsShowUp / data.meetingsBooked) * 100).toFixed(1)
+  const showUpRate = data.todayAppointments > 0
+    ? ((data.meetingsShowUp / data.todayAppointments) * 100).toFixed(1)
     : "0.0";
   const closedRate = data.meetingsShowUp > 0
     ? ((data.meetingsClosed / data.meetingsShowUp) * 100).toFixed(1)
     : "0.0";
-  const noShowRate = data.meetingsBooked > 0
-    ? ((data.meetingsNoShow / data.meetingsBooked) * 100).toFixed(1)
+  const noShowRate = data.todayAppointments > 0
+    ? ((data.meetingsNoShow / data.todayAppointments) * 100).toFixed(1)
     : "0.0";
 
   const stages = [
     {
-      label: "Booked",
-      value: data.meetingsBooked,
+      label: "Today Appointments",
+      value: data.todayAppointments,
       rate: bookedRate,
       rateLabel: "of positives",
       icon: CalendarCheck,
@@ -164,7 +164,7 @@ export function MeetingFunnel({ data, totalPositiveReplies }: MeetingFunnelProps
               {"rate" in d && (
                 <div className="mt-1 text-[11px] text-muted-foreground">
                   <span className="font-semibold text-foreground">{d.rate}%</span>
-                  <span> of booked</span>
+                  <span> of today appointments</span>
                 </div>
               )}
             </CardContent>

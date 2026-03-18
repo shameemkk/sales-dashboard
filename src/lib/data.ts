@@ -9,14 +9,14 @@ export interface DailyPerformance {
   totalNewLeadsContacted: number;
   totalReplies: number;
   totalPositiveReplies: number;
-  meetingsBooked: number;
+  todayAppointments: number;
   meetingsNoShow: number;
   meetingsShowUp: number;
   meetingsDisqualified: number;
   meetingsCanceled: number;
   meetingsRescheduled: number;
   meetingsClosed: number;
-  markedBooking: number;
+  bookings: number;
 }
 
 export interface EmailAccount {

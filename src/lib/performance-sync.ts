@@ -123,7 +123,7 @@ async function getClosedMeetingCount(date: string): Promise<number> {
 }
 
 async function getCalendarEventStats(date: string): Promise<{
-  booked: number;
+  todayAppointments: number;
   cancelled: number;
   noshow: number;
   showed: number;
@@ -145,7 +145,7 @@ async function getCalendarEventStats(date: string): Promise<{
   }).then((r) => r.json());
 
   const result = {
-    booked: 0,
+    todayAppointments: 0,
     cancelled: 0,
     noshow: 0,
     showed: 0,
@@ -155,7 +155,7 @@ async function getCalendarEventStats(date: string): Promise<{
 
   for (const e of events as Array<{ appointmentStatus?: string }>) {
     switch ((e.appointmentStatus ?? "").toLowerCase()) {
-      case "confirmed":   result.booked++;       break;
+      case "confirmed":   result.todayAppointments++;       break;
       case "cancelled":   result.cancelled++;    break;
       case "noshow":
       case "no-show":     result.noshow++;       break;
@@ -168,7 +168,7 @@ async function getCalendarEventStats(date: string): Promise<{
   return result;
 }
 
-async function getMarkedBookingCount(date: string): Promise<number> {
+async function getBookingsCount(date: string): Promise<number> {
   const startTime = new Date(date + "T00:00:00-04:00").getTime();
   // endTime = 1 month from end of day
   const endOfDay = new Date(date + "T23:59:59.999-04:00");
@@ -204,14 +204,14 @@ export interface PerformanceSyncResult {
   total_new_leads_contacted: number;
   total_replies: number;
   total_positive_replies: number;
-  meetings_booked: number;
+  today_appointments: number;
   meetings_no_show: number;
   meetings_show_up: number;
   meetings_disqualified: number;
   meetings_canceled: number;
   meetings_rescheduled: number;
   meetings_closed: number;
-  marked_booking: number;
+  bookings: number;
 }
 
 export async function runPerformanceSync(
@@ -237,29 +237,29 @@ export async function runPerformanceSync(
   const days = getDaysInRange(startDate, endDate);
   const perDayStats = await Promise.all(
     days.map(async (date) => {
-      const [closed, calendar, markedBooking] = await Promise.all([
+      const [closed, calendar, bookings] = await Promise.all([
         getClosedMeetingCount(date),
         getCalendarEventStats(date),
-        getMarkedBookingCount(date),
+        getBookingsCount(date),
       ]);
-      return { date, closed, calendar, markedBooking };
+      return { date, closed, calendar, bookings };
     })
   );
 
-  const rows: PerformanceSyncResult[] = perDayStats.map(({ date, closed, calendar, markedBooking }) => ({
+  const rows: PerformanceSyncResult[] = perDayStats.map(({ date, closed, calendar, bookings }) => ({
     date,
     total_emails_sent: workspaceStats.emails_sent,
     total_new_leads_contacted: newLeadsContacted,
     total_replies: workspaceStats.replies,
     total_positive_replies: workspaceStats.positive_replies,
-    meetings_booked: calendar.booked,
+    today_appointments: calendar.todayAppointments,
     meetings_no_show: calendar.noshow,
     meetings_show_up: calendar.showed,
     meetings_disqualified: calendar.disqualified,
     meetings_canceled: calendar.cancelled,
     meetings_rescheduled: calendar.rescheduled,
     meetings_closed: closed,
-    marked_booking: markedBooking,
+    bookings: bookings,
   }));
 
   // Upsert into daily_performance

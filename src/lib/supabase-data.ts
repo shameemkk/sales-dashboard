@@ -10,14 +10,14 @@ function mapRow(row: DbRow): DailyPerformance {
     totalNewLeadsContacted: (row.total_new_leads_contacted as number) ?? 0,
     totalReplies: (row.total_replies as number) ?? 0,
     totalPositiveReplies: (row.total_positive_replies as number) ?? 0,
-    meetingsBooked: (row.meetings_booked as number) ?? 0,
+    todayAppointments: (row.today_appointments as number) ?? 0,
     meetingsNoShow: (row.meetings_no_show as number) ?? 0,
     meetingsShowUp: (row.meetings_show_up as number) ?? 0,
     meetingsDisqualified: (row.meetings_disqualified as number) ?? 0,
     meetingsCanceled: (row.meetings_canceled as number) ?? 0,
     meetingsRescheduled: (row.meetings_rescheduled as number) ?? 0,
     meetingsClosed: (row.meetings_closed as number) ?? 0,
-    markedBooking: (row.marked_booking as number) ?? 0,
+    bookings: (row.bookings as number) ?? 0,
   };
 }
 
@@ -28,14 +28,14 @@ function zeroPerformance(date: string): DailyPerformance {
     totalNewLeadsContacted: 0,
     totalReplies: 0,
     totalPositiveReplies: 0,
-    meetingsBooked: 0,
+    todayAppointments: 0,
     meetingsNoShow: 0,
     meetingsShowUp: 0,
     meetingsDisqualified: 0,
     meetingsCanceled: 0,
     meetingsRescheduled: 0,
     meetingsClosed: 0,
-    markedBooking: 0,
+    bookings: 0,
   };
 }
 
@@ -46,14 +46,14 @@ function sumRows(rows: DailyPerformance[], dateLabel: string): DailyPerformance 
     totals.totalNewLeadsContacted += r.totalNewLeadsContacted;
     totals.totalReplies += r.totalReplies;
     totals.totalPositiveReplies += r.totalPositiveReplies;
-    totals.meetingsBooked += r.meetingsBooked;
+    totals.todayAppointments += r.todayAppointments;
     totals.meetingsNoShow += r.meetingsNoShow;
     totals.meetingsShowUp += r.meetingsShowUp;
     totals.meetingsDisqualified += r.meetingsDisqualified;
     totals.meetingsCanceled += r.meetingsCanceled;
     totals.meetingsRescheduled += r.meetingsRescheduled;
     totals.meetingsClosed += r.meetingsClosed;
-    totals.markedBooking += r.markedBooking;
+    totals.bookings += r.bookings;
   }
   return totals;
 }
