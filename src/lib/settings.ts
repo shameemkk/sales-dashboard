@@ -13,6 +13,7 @@ export const ALL_COL_KEYS = [
   "positivePct",
   "meetingsBooked",
   "bookedPct",
+  "markedBooking",
   "meetingsShowUp",
   "showUpPct",
   "meetingsClosed",
