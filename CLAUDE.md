@@ -18,11 +18,13 @@ Next.js 16 App Router project (TypeScript, Tailwind v4) for Uparrowagency's inte
 - **External APIs**: Two upstream services are consumed server-side:
   - `send.uparrowagency.com/api` (Instantly-style email campaigns) — uses `SEND_API_TOKEN`
   - `services.leadconnectorhq.com` (GoHighLevel / LeadConnector) — uses `LCH_API_TOKEN`
-- **Sync layer** (`src/lib/sync.ts`, `src/lib/performance-sync.ts`): API routes pull stats from external APIs and upsert into Supabase tables (`account_daily_stats`, `daily_performance`)
+- **Sync layer** (`src/lib/sync.ts`, `src/lib/performance-sync.ts`, `src/lib/leads-sync.ts`): API routes pull stats from external APIs and upsert into Supabase tables (`account_daily_stats`, `daily_performance`, `leads`)
 - **Supabase clients**: three variants for different contexts:
   - `src/lib/supabase.ts` — browser client (`createBrowserClient`)
   - `src/lib/supabase-server.ts` — server actions/middleware (`createServerClient` with cookies)
   - `src/lib/supabase-bg.ts` — background/API route use (service-role key, no cookie context)
+- **Middleware** (`src/proxy.ts`): Supabase auth middleware — refreshes session, redirects unauthenticated users to `/login`
+- **Client data helpers** (`src/lib/supabase-data.ts`): browser-side Supabase queries for dashboard data
 - **Client components** fetch data via internal API routes (`/api/accounts`, `/api/account-stats`, `/api/performance-sync`, etc.)
 
 ### UI structure
@@ -44,6 +46,10 @@ All under `src/app/api/`:
 - `sender-emails/` — sender email list
 - `tags/` — account tags
 - `warmup/[id]/` — toggle warmup for a sender
+- `leads/` — list leads from Supabase
+- `leads-sync/` — trigger full leads sync from GHL
+- `leads-enrich/` — enrich leads with first-dial/text timestamps
+- `webhooks/ghl/` — inbound GHL webhooks (ContactCreate, OutboundMessage); secured via `?secret=` query param (`WEBHOOK_SECRET`)
 
 ### Path alias
 
@@ -51,4 +57,4 @@ All under `src/app/api/`:
 
 ## Environment variables
 
-See `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SEND_API_TOKEN`, `LCH_API_TOKEN`, `SYNC_SECRET`, `DEBUG`
+See `.env.example`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SEND_API_TOKEN`, `LCH_API_TOKEN`, `SYNC_SECRET`, `WEBHOOK_SECRET`, `DEBUG`
