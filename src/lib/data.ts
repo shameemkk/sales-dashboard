@@ -55,3 +55,19 @@ export interface SyncJob {
   completedAt: string | null;
 }
 
+export interface Lead {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  tags: string[];
+  dateAdded: string | null;
+  notes: string | null;
+  opportunityId: string | null;
+  syncedAt: string | null;
+  enriched: boolean;
+  firstDialTime: string | null;
+  firstTextTime: string | null;
+}
+

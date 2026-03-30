@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DashboardClient } from "@/components/dashboard-client";
 import { TableClient } from "@/components/table-client";
 import { AccountOverview } from "@/components/account-overview";
+import { LeadsTable } from "@/components/leads-table";
 import { SettingsPanel } from "@/components/settings-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -28,11 +29,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { logoutAction } from "@/app/actions";
-import { TrendingUp, TableIcon, Users, LogOut, Settings } from "lucide-react";
+import { TrendingUp, TableIcon, Users, LogOut, Settings, Contact } from "lucide-react";
 import Image from "next/image";
 import { getDefaultTableDays } from "@/lib/settings";
 
-type Section = "performance-table" | "daily-performance" | "account-overview" | "settings";
+type Section = "performance-table" | "daily-performance" | "account-overview" | "leads" | "settings";
 
 const navItems: {
   id: Section;
@@ -42,6 +43,7 @@ const navItems: {
   { id: "daily-performance", label: "Daily Performance", icon: TrendingUp },
   { id: "performance-table", label: "Performance Table", icon: TableIcon },
   { id: "account-overview", label: "Account Overview", icon: Users },
+  { id: "leads", label: "Leads", icon: Contact },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -176,6 +178,13 @@ export function DashboardTabs() {
         {active === "account-overview" && (
           <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
             <AccountOverview />
+          </main>
+        )}
+
+        {/* Leads */}
+        {active === "leads" && (
+          <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
+            <LeadsTable />
           </main>
         )}
 
