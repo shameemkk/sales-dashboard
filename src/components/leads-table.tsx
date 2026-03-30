@@ -503,7 +503,7 @@ export function LeadsTable() {
 
       <Card className="overflow-hidden">
         {/* Header */}
-        <CardHeader className="pb-3 space-y-3">
+        <CardHeader className="px-2 pb-2 space-y-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
@@ -574,7 +574,7 @@ export function LeadsTable() {
                     currentField={sortField}
                     currentDir={sortDir}
                     onSort={handleSort}
-                    className="min-w-30"
+                    className="min-w-30 pl-3"
                   />
                   <SortableHeader
                     label="Name"
@@ -582,7 +582,6 @@ export function LeadsTable() {
                     currentField={sortField}
                     currentDir={sortDir}
                     onSort={handleSort}
-                    className="min-w-20"
                   />
                   <SortableHeader
                     label="Email"
@@ -590,7 +589,6 @@ export function LeadsTable() {
                     currentField={sortField}
                     currentDir={sortDir}
                     onSort={handleSort}
-                    className="min-w-45"
                   />
                   <TableHead className="min-w-30">
                     <span className="text-xs font-medium">Phone</span>
@@ -686,7 +684,7 @@ export function LeadsTable() {
                         onClick={() => setSelectedLead(lead)}
                       >
                         {/* Date */}
-                        <TableCell className="py-3">
+                        <TableCell className="py-3 pl-3">
                           <div>
                             <p className="text-sm tabular-nums">{formatDate(lead.dateAdded)}</p>
                             <p className="text-xs text-muted-foreground tabular-nums">{formatTime(lead.dateAdded)}</p>
@@ -839,7 +837,7 @@ export function LeadsTable() {
 
           {/* Footer / Pagination */}
           {!loading && !error && total > 0 && (
-            <div className="flex items-center justify-between border-t px-4 py-3 bg-muted/20">
+            <div className="flex items-center justify-between border-t px-2 py-2 bg-muted/20">
               <div className="flex items-center gap-3">
                 <p className="text-xs text-muted-foreground">
                   {from.toLocaleString()}–{to.toLocaleString()} of {total.toLocaleString()}

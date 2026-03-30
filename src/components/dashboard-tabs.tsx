@@ -183,7 +183,7 @@ export function DashboardTabs() {
 
         {/* Leads */}
         {active === "leads" && (
-          <main className="mx-auto w-full max-w-7xl px-6 py-6 md:px-8">
+          <main className="w-full px-2 py-3">
             <LeadsTable />
           </main>
         )}
