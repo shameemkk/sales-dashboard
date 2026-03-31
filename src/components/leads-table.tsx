@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -59,10 +61,19 @@ import {
   CheckCircle2,
   AlertCircle,
   Building2,
+  CalendarIcon,
+  MessageSquare,
 } from "lucide-react";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 import type { Lead } from "@/lib/data";
 
 /* ─── Types ─── */
+interface Stats {
+  avgSpeedToDial: number | null;
+  avgSpeedToText: number | null;
+}
+
 interface Meta {
   current_page: number;
   last_page: number;
@@ -393,10 +404,12 @@ function DetailField({
 export function LeadsTable() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [meta, setMeta] = useState<Meta | null>(null);
+  const [stats, setStats] = useState<Stats>({ avgSpeedToDial: null, avgSpeedToText: null });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>("dateAdded");
@@ -430,6 +443,16 @@ export function LeadsTable() {
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
     if (search) params.set("search", search);
+    if (dateRange?.from) {
+      const from = new Date(dateRange.from);
+      from.setHours(0, 0, 0, 0);
+      params.set("dateFrom", from.toISOString());
+    }
+    if (dateRange?.to) {
+      const to = new Date(dateRange.to);
+      to.setHours(23, 59, 59, 999);
+      params.set("dateTo", to.toISOString());
+    }
 
     fetch(`/api/leads?${params}`)
       .then((r) => {
@@ -440,6 +463,7 @@ export function LeadsTable() {
         if (cancelled) return;
         setLeads((json.data ?? []).map(mapLead));
         setMeta(json.meta ?? null);
+        setStats(json.stats ?? { avgSpeedToDial: null, avgSpeedToText: null });
         setLoading(false);
       })
       .catch((err: Error) => {
@@ -452,7 +476,7 @@ export function LeadsTable() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, search]);
+  }, [page, pageSize, search, dateRange]);
 
   // Scroll to top of table on page change
   useEffect(() => {
@@ -528,6 +552,45 @@ export function LeadsTable() {
 
             {/* Toolbar */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Date range picker */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 text-xs gap-1.5 font-normal">
+                    <CalendarIcon className="size-3.5 text-muted-foreground" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>{format(dateRange.from, "MMM d")} – {format(dateRange.to, "MMM d, yyyy")}</>
+                      ) : (
+                        format(dateRange.from, "MMM d, yyyy")
+                      )
+                    ) : (
+                      "Date range"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={(range) => { setDateRange(range); setPage(1); }}
+                    numberOfMonths={2}
+                    disabled={{ after: new Date() }}
+                  />
+                  {dateRange && (
+                    <div className="border-t px-3 py-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs w-full"
+                        onClick={() => { setDateRange(undefined); setPage(1); }}
+                      >
+                        Clear dates
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
               {/* Tag filter */}
               {allTags.length > 0 && (
                 <Select value={tagFilter} onValueChange={(v) => { setTagFilter(v); }}>
@@ -564,6 +627,38 @@ export function LeadsTable() {
               </div>
             </div>
           </div>
+
+          {/* Average Speed Stats */}
+          {(stats.avgSpeedToDial !== null || stats.avgSpeedToText !== null) && (
+            <div className="flex items-center gap-3 pt-1">
+              {stats.avgSpeedToDial !== null && (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                  <Phone className="size-3.5 text-muted-foreground" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground leading-none">Avg Speed to Dial</p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {stats.avgSpeedToDial < 60
+                        ? `${stats.avgSpeedToDial}m`
+                        : `${Math.floor(stats.avgSpeedToDial / 60)}h ${stats.avgSpeedToDial % 60}m`}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {stats.avgSpeedToText !== null && (
+                <div className="flex items-center gap-2 rounded-lg border px-3 py-1.5">
+                  <MessageSquare className="size-3.5 text-muted-foreground" />
+                  <div>
+                    <p className="text-[10px] text-muted-foreground leading-none">Avg Speed to Text</p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {stats.avgSpeedToText < 60
+                        ? `${stats.avgSpeedToText}m`
+                        : `${Math.floor(stats.avgSpeedToText / 60)}h ${stats.avgSpeedToText % 60}m`}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="p-0">
