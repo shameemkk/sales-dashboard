@@ -23,6 +23,7 @@ interface GHLContact {
   id: string;
   firstName?: string;
   lastName?: string;
+  companyName?: string;
   email?: string;
   phone?: string;
   tags?: string[];
@@ -37,6 +38,7 @@ function mapContactToRow(c: GHLContact) {
     id: c.id,
     first_name: c.firstName ?? null,
     last_name: c.lastName ?? null,
+    company_name: c.companyName ?? null,
     email: c.email ?? null,
     phone: c.phone ?? null,
     tags: c.tags ?? [],

@@ -58,6 +58,7 @@ import {
   Users,
   CheckCircle2,
   AlertCircle,
+  Building2,
 } from "lucide-react";
 import type { Lead } from "@/lib/data";
 
@@ -96,6 +97,7 @@ function mapLead(item: any): Lead {
     id: item.id as string,
     firstName: item.first_name ?? null,
     lastName: item.last_name ?? null,
+    companyName: item.company_name ?? null,
     email: item.email ?? null,
     phone: item.phone ?? null,
     tags,
@@ -280,6 +282,7 @@ function LeadDetailDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <DetailField icon={Mail} label="Email" value={lead.email} copyable />
             <DetailField icon={Phone} label="Phone" value={lead.phone} copyable />
+            <DetailField icon={Building2} label="Company" value={lead.companyName} />
             <DetailField icon={Clock} label="Date Added" value={formatFullDate(lead.dateAdded)} />
             <DetailField icon={Tag} label="Tags" value={lead.tags.length > 0 ? lead.tags.join(", ") : null} />
           </div>
@@ -577,7 +580,7 @@ export function LeadsTable() {
                     className="min-w-30 pl-3"
                   />
                   <SortableHeader
-                    label="Name"
+                    label="Contact Name"
                     field="name"
                     currentField={sortField}
                     currentDir={sortDir}
@@ -694,6 +697,9 @@ export function LeadsTable() {
                         {/* Name */}
                         <TableCell className="py-3">
                           <p className="text-sm font-medium">{name}</p>
+                          {lead.companyName && (
+                            <p className="text-xs text-muted-foreground">{lead.companyName}</p>
+                          )}
                         </TableCell>
 
                         {/* Email */}

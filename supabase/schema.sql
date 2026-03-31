@@ -37,3 +37,44 @@ $$ language plpgsql;
 create trigger set_daily_performance_updated_at
   before update on public.daily_performance
   for each row execute function public.set_updated_at();
+
+-- ============================================================
+-- Leads (synced from GoHighLevel)
+-- ============================================================
+create table if not exists public.leads (
+  id text primary key,
+  first_name text,
+  last_name text,
+  company_name text,
+  email text,
+  phone text,
+  tags text[] not null default '{}',
+  date_added timestamptz,
+  notes text,
+  first_dial_time timestamptz,
+  first_text_time timestamptz,
+  opportunity_id text,
+  synced_at timestamptz not null default now(),
+  enriched boolean not null default false
+);
+
+-- Indexes for search, filtering, and enrichment
+create index if not exists idx_leads_date_added on public.leads (date_added desc);
+create index if not exists idx_leads_email on public.leads (email);
+create index if not exists idx_leads_phone on public.leads (phone);
+create index if not exists idx_leads_company_name on public.leads (company_name);
+create index if not exists idx_leads_enriched on public.leads (enriched) where enriched = false;
+
+-- RLS
+alter table public.leads enable row level security;
+
+create policy "Authenticated users can read leads"
+  on public.leads for select
+  to authenticated
+  using (true);
+
+create policy "Service role can manage leads"
+  on public.leads for all
+  to service_role
+  using (true)
+  with check (true);
