@@ -341,6 +341,323 @@ Sync performance data for a date range. **Requires secret header.**
 
 ---
 
+## Leads
+
+### `GET /api/leads`
+
+List leads from Supabase with pagination, search, and date filtering.
+
+**Auth:** Supabase session (server-side)
+
+**Query Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `page` | number | No | Page number (default: `1`) |
+| `pageSize` | number | No | Results per page (default: `50`, max: `250`) |
+| `search` | string | No | Filter by first name, last name, company, email, or phone (partial match) |
+| `dateFrom` | string | No | Filter leads added on or after this date |
+| `dateTo` | string | No | Filter leads added on or before this date |
+
+**Response `200`**
+```json
+{
+  "data": [
+    {
+      "id": "abc123",
+      "first_name": "John",
+      "last_name": "Doe",
+      "company_name": "Acme Inc",
+      "email": "john@acme.com",
+      "phone": "+15551234567",
+      "tags": ["tag1"],
+      "date_added": "2026-03-01T10:00:00Z",
+      "opportunity_id": "opp_123",
+      "enriched": true,
+      "first_dial_time": "2026-03-01T10:05:00Z",
+      "first_text_time": "2026-03-01T10:03:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 5,
+    "per_page": 50,
+    "total": 230
+  },
+  "stats": {
+    "avgSpeedToDial": 12,
+    "avgSpeedToText": 8
+  }
+}
+```
+
+`avgSpeedToDial` / `avgSpeedToText` are in minutes, computed across the filtered result set. `null` if no data.
+
+**Error `401`** — not authenticated
+
+---
+
+## Leads Sync
+
+### `POST /api/leads-sync`
+
+Trigger a full leads sync from GoHighLevel (all contacts, no date filter). Runs in background.
+
+**Auth:** Supabase session required
+
+**Request Body:** None
+
+**Response `200`**
+```json
+{ "ok": true, "status": "started" }
+```
+
+**Error `401`** — not authenticated
+**Error `409`** — sync already in progress
+
+---
+
+### `GET /api/leads-sync`
+
+Poll current leads sync status.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "status": "completed",
+  "upserted": 450,
+  "pages": 2,
+  "total": 450,
+  "dbCount": 1200
+}
+```
+
+**`status` values:** `idle` | `running` | `completed` | `failed`
+
+---
+
+## Leads Enrich
+
+### `POST /api/leads-enrich`
+
+Enrich leads with first dial/text times from GoHighLevel conversations. Runs in background.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "leadIds": ["id1", "id2"]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `leadIds` | string[] | No | Specific lead IDs to enrich. Omit to enrich all un-enriched leads |
+
+**Response `200`**
+```json
+{ "ok": true, "status": "started", "total": 50 }
+```
+
+**Error `401`** — not authenticated
+**Error `409`** — enrichment already in progress
+
+---
+
+### `GET /api/leads-enrich`
+
+Poll current enrichment status.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "status": "completed",
+  "processed": 50,
+  "total": 50,
+  "enrichedCount": 200,
+  "totalCount": 1200
+}
+```
+
+**`status` values:** `idle` | `running` | `completed` | `failed`
+
+---
+
+## Contact Sync (Scheduled)
+
+Scheduled sync that fetches contacts added in the last 5 days from GoHighLevel. Independent from the full leads sync above.
+
+### `POST /api/contact-sync`
+
+Trigger a scheduled contact sync. Supports dual authentication.
+
+**Auth:** Supabase session (UI) **OR** `x-sync-secret` header (external cron)
+
+When called via `x-sync-secret`, the endpoint checks the `contact_sync_schedule` table — if scheduling is disabled, it returns `{ "skipped": true }` without running.
+
+**Request Headers** _(for cron/external triggers)_
+
+| Header | Required | Description |
+|---|---|---|
+| `x-sync-secret` | Conditional | Required when not using session auth |
+
+**Request Body:** None
+
+**Response `200`**
+```json
+{ "ok": true, "status": "started", "jobId": 1 }
+```
+
+**Response `200` (skipped)**
+```json
+{ "skipped": true, "reason": "Schedule disabled" }
+```
+
+**Error `401`** — not authenticated (no session and no valid secret)
+**Error `409`** — contact sync already in progress
+**Error `500`** — failed to create sync job
+
+---
+
+### `GET /api/contact-sync`
+
+Poll current contact sync status.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "status": "completed",
+  "jobId": 1,
+  "contactsFetched": 47,
+  "contactsUpserted": 47
+}
+```
+
+**`status` values:** `idle` | `running` | `completed` | `failed`
+
+---
+
+### `GET /api/contact-sync/history`
+
+Get recent contact sync job history.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "jobs": [
+    {
+      "id": 1,
+      "status": "completed",
+      "errorMessage": null,
+      "contactsFetched": 47,
+      "contactsUpserted": 47,
+      "retryCount": 0,
+      "startedAt": "2026-04-02T06:00:00Z",
+      "completedAt": "2026-04-02T06:00:12Z"
+    }
+  ]
+}
+```
+
+Returns the last 20 jobs ordered by `startedAt` descending.
+
+**`status` values:** `running` | `completed` | `failed`
+
+---
+
+### `POST /api/contact-sync/retry`
+
+Retry a failed contact sync job. Creates a new job with incremented `retryCount`.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "job_id": 1
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | number | Yes | ID of the failed job to retry |
+
+**Response `200`**
+```json
+{ "ok": true, "jobId": 2 }
+```
+
+**Error `400`** — missing `job_id` or job is not in `failed` status
+**Error `404`** — job not found
+
+---
+
+### `GET /api/contact-sync/schedule`
+
+Get the current schedule configuration.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "enabled": false,
+  "timeUtc": "06:00",
+  "updatedAt": "2026-04-01T12:00:00Z"
+}
+```
+
+> **Note:** `timeUtc` is always stored and returned in UTC. The frontend converts to/from IST (UTC+5:30) for display. For example, `"06:00"` UTC is shown as `"11:30"` IST in the Settings UI.
+
+---
+
+### `PUT /api/contact-sync/schedule`
+
+Update the schedule configuration.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "enabled": true,
+  "timeUtc": "06:00"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `enabled` | boolean | No | Enable or disable the scheduled sync |
+| `timeUtc` | string | No | Time to run in `HH:MM` format (**UTC**). The frontend converts IST → UTC before sending |
+
+**Response `200`**
+```json
+{ "ok": true }
+```
+
+**Error `400`** — invalid `timeUtc` format (must be `HH:MM` with valid hour/minute)
+
+---
+
 ## Error Format
 
 All error responses follow this shape:

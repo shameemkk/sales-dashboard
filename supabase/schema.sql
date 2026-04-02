@@ -78,3 +78,35 @@ create policy "Service role can manage leads"
   to service_role
   using (true)
   with check (true);
+
+-- ============================================================
+-- Contact Sync Jobs (execution history for scheduled syncs)
+-- ============================================================
+create table if not exists public.contact_sync_jobs (
+  id              bigint generated always as identity primary key,
+  status          text not null default 'running'
+                    check (status in ('running', 'completed', 'failed')),
+  error_message   text,
+  contacts_fetched integer not null default 0,
+  contacts_upserted integer not null default 0,
+  retry_count     integer not null default 0,
+  started_at      timestamptz not null default now(),
+  completed_at    timestamptz
+);
+
+create index if not exists idx_contact_sync_jobs_started
+  on public.contact_sync_jobs (started_at desc);
+
+-- ============================================================
+-- Contact Sync Schedule (single-row config)
+-- ============================================================
+create table if not exists public.contact_sync_schedule (
+  id         integer primary key default 1 check (id = 1),
+  enabled    boolean not null default false,
+  time_utc   text not null default '06:00',
+  updated_at timestamptz not null default now()
+);
+
+insert into public.contact_sync_schedule (enabled, time_utc)
+  values (false, '06:00')
+  on conflict (id) do nothing;

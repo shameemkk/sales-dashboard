@@ -72,3 +72,14 @@ export interface Lead {
   firstTextTime: string | null;
 }
 
+export interface ContactSyncJob {
+  id: number;
+  status: "running" | "completed" | "failed";
+  errorMessage: string | null;
+  contactsFetched: number;
+  contactsUpserted: number;
+  retryCount: number;
+  startedAt: string;
+  completedAt: string | null;
+}
+

@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Mail, MessageSquare, CalendarDays, Save, CheckCircle2, RefreshCw, Loader2, Users, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Mail, MessageSquare, CalendarDays, Save, CheckCircle2, RefreshCw, Loader2, Users, Sparkles, Clock, History, RotateCcw } from "lucide-react";
 import { getDefaultCols, getDefaultTableDays, saveDefaultCols, saveDefaultTableDays } from "@/lib/settings";
+import type { ContactSyncJob } from "@/lib/data";
 
 const EMAIL_COLS = [
   { key: "totalEmailsSent",       label: "Sent" },
@@ -38,6 +42,45 @@ const DATE_OPTIONS = [
   { value: 90, label: "Last 90 days" },
 ];
 
+const IST_OFFSET = 5 * 60 + 30; // IST is UTC+5:30 in minutes
+
+/** Convert HH:MM UTC to HH:MM IST for display */
+function utcToIst(utcTime: string): string {
+  const [h, m] = utcTime.split(":").map(Number);
+  let totalMin = h * 60 + m + IST_OFFSET;
+  if (totalMin >= 1440) totalMin -= 1440;
+  const ih = Math.floor(totalMin / 60);
+  const im = totalMin % 60;
+  return `${String(ih).padStart(2, "0")}:${String(im).padStart(2, "0")}`;
+}
+
+/** Convert HH:MM IST to HH:MM UTC for storage */
+function istToUtc(istTime: string): string {
+  const [h, m] = istTime.split(":").map(Number);
+  let totalMin = h * 60 + m - IST_OFFSET;
+  if (totalMin < 0) totalMin += 1440;
+  const uh = Math.floor(totalMin / 60);
+  const um = totalMin % 60;
+  return `${String(uh).padStart(2, "0")}:${String(um).padStart(2, "0")}`;
+}
+
+function formatDuration(start: string, end: string | null): string {
+  if (!end) return "...";
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  if (ms < 1000) return "<1s";
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  return `${mins}m ${secs % 60}s`;
+}
+
+function formatTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+    ", " +
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 export function SettingsPanel() {
   const [cols, setCols] = useState<Set<string>>(() => getDefaultCols());
   const [days, setDays] = useState<number>(() => getDefaultTableDays());
@@ -49,8 +92,29 @@ export function SettingsPanel() {
   const [enrichResult, setEnrichResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [enrichCounts, setEnrichCounts] = useState<{ enriched: number; total: number } | null>(null);
 
+  // Scheduled contact sync state — scheduleTime is in IST for display
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("11:30"); // default 06:00 UTC = 11:30 IST
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleSaved, setScheduleSaved] = useState(false);
+  const [contactSyncing, setContactSyncing] = useState(false);
+  const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [contactSyncHistory, setContactSyncHistory] = useState<ContactSyncJob[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [retryingJobId, setRetryingJobId] = useState<number | null>(null);
+
   const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const enrichPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const contactSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const r = await fetch("/api/contact-sync/history");
+      const data = await r.json();
+      setContactSyncHistory(data.jobs ?? []);
+    } catch { /* ignore */ }
+    setHistoryLoading(false);
+  }, []);
 
   // Check status on mount (persists across page refresh)
   useEffect(() => {
@@ -59,7 +123,7 @@ export function SettingsPanel() {
       setSyncDbCount(s.dbCount ?? 0);
       if (s.status === "running") {
         setSyncing(true);
-        setSyncResult({ ok: true, message: "Syncing…" });
+        setSyncResult({ ok: true, message: "Syncing\u2026" });
         startSyncPoll();
       } else if (s.status === "completed") {
         setSyncResult({ ok: true, message: `Synced ${s.upserted} leads from ${s.pages} page${s.pages !== 1 ? "s" : ""}` });
@@ -71,16 +135,40 @@ export function SettingsPanel() {
       setEnrichCounts({ enriched: s.enrichedCount ?? 0, total: s.totalCount ?? 0 });
       if (s.status === "running") {
         setEnriching(true);
-        setEnrichResult({ ok: true, message: `${s.processed}/${s.total} leads enriched…` });
+        setEnrichResult({ ok: true, message: `${s.processed}/${s.total} leads enriched\u2026` });
         startEnrichPoll();
       } else if (s.status === "completed") {
         setEnrichResult({ ok: true, message: `Done! ${s.processed} leads enriched` });
       }
     }).catch(() => {});
 
+    // Load schedule config (backend stores UTC, display as IST)
+    fetch("/api/contact-sync/schedule").then((r) => r.json()).then((s) => {
+      setScheduleEnabled(s.enabled ?? false);
+      setScheduleTime(utcToIst(s.timeUtc ?? "06:00"));
+    }).catch(() => {}).finally(() => setScheduleLoading(false));
+
+    // Check contact sync status
+    fetch("/api/contact-sync").then((r) => r.json()).then((s) => {
+      if (s.status === "running") {
+        setContactSyncing(true);
+        setContactSyncResult({ ok: true, message: "Syncing recent contacts\u2026" });
+        startContactSyncPoll();
+      } else if (s.status === "completed") {
+        const enrichMsg = s.contactsEnriched ? `, enriched ${s.contactsEnriched}` : "";
+        setContactSyncResult({ ok: true, message: `Synced ${s.contactsUpserted ?? 0} contacts${enrichMsg}` });
+      } else if (s.status === "failed") {
+        setContactSyncResult({ ok: false, message: s.error ?? "Contact sync failed" });
+      }
+    }).catch(() => {});
+
+    // Load history
+    fetchHistory();
+
     return () => {
       if (syncPollRef.current) clearInterval(syncPollRef.current);
       if (enrichPollRef.current) clearInterval(enrichPollRef.current);
+      if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -115,7 +203,7 @@ export function SettingsPanel() {
         const s = await r.json();
         setEnrichCounts({ enriched: s.enrichedCount ?? 0, total: s.totalCount ?? 0 });
         if (s.status === "running") {
-          setEnrichResult({ ok: true, message: `${s.processed}/${s.total} leads enriched…` });
+          setEnrichResult({ ok: true, message: `${s.processed}/${s.total} leads enriched\u2026` });
         } else if (s.status === "completed") {
           clearInterval(enrichPollRef.current!);
           enrichPollRef.current = null;
@@ -129,6 +217,30 @@ export function SettingsPanel() {
         }
       } catch { /* ignore */ }
     }, 2000);
+  }
+
+  function startContactSyncPoll() {
+    if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current);
+    contactSyncPollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch("/api/contact-sync");
+        const s = await r.json();
+        if (s.status === "completed") {
+          clearInterval(contactSyncPollRef.current!);
+          contactSyncPollRef.current = null;
+          setContactSyncing(false);
+          const enrichMsg = s.contactsEnriched ? `, enriched ${s.contactsEnriched}` : "";
+          setContactSyncResult({ ok: true, message: `Synced ${s.contactsUpserted ?? 0} contacts${enrichMsg}` });
+          fetchHistory();
+        } else if (s.status === "failed") {
+          clearInterval(contactSyncPollRef.current!);
+          contactSyncPollRef.current = null;
+          setContactSyncing(false);
+          setContactSyncResult({ ok: false, message: s.error ?? "Contact sync failed" });
+          fetchHistory();
+        }
+      } catch { /* ignore */ }
+    }, 3000);
   }
 
   function toggle(key: string) {
@@ -167,6 +279,49 @@ export function SettingsPanel() {
       setEnriching(false);
       setEnrichResult({ ok: false, message: err instanceof Error ? err.message : "Enrich failed" });
     }
+  }
+
+  async function handleContactSync() {
+    setContactSyncing(true);
+    setContactSyncResult(null);
+    try {
+      const res = await fetch("/api/contact-sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Contact sync failed");
+      startContactSyncPoll();
+    } catch (err) {
+      setContactSyncing(false);
+      setContactSyncResult({ ok: false, message: err instanceof Error ? err.message : "Contact sync failed" });
+    }
+  }
+
+  async function handleSaveSchedule() {
+    try {
+      const res = await fetch("/api/contact-sync/schedule", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: scheduleEnabled, timeUtc: istToUtc(scheduleTime) }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setScheduleSaved(true);
+      setTimeout(() => setScheduleSaved(false), 3000);
+    } catch { /* ignore */ }
+  }
+
+  async function handleRetry(jobId: number) {
+    setRetryingJobId(jobId);
+    try {
+      const res = await fetch("/api/contact-sync/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!res.ok) throw new Error("Retry failed");
+      setContactSyncing(true);
+      setContactSyncResult({ ok: true, message: "Retrying contact sync\u2026" });
+      startContactSyncPoll();
+    } catch { /* ignore */ }
+    setRetryingJobId(null);
   }
 
   function handleSave() {
@@ -302,7 +457,7 @@ export function SettingsPanel() {
           <div className="flex items-center gap-3">
             <Button onClick={handleLeadsSync} disabled={syncing} variant="outline" className="gap-2">
               {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-              {syncing ? "Syncing…" : "Sync All Leads"}
+              {syncing ? "Syncing\u2026" : "Sync All Leads"}
             </Button>
             {syncResult && (
               <span className={`text-sm font-medium ${syncResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
@@ -333,7 +488,7 @@ export function SettingsPanel() {
           <div className="flex items-center gap-3">
             <Button onClick={handleEnrich} disabled={enriching} variant="outline" className="gap-2">
               {enriching ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-              {enriching ? "Enriching…" : "Enrich All Leads"}
+              {enriching ? "Enriching\u2026" : "Enrich All Leads"}
             </Button>
             {enrichResult && (
               <span className={`text-sm font-medium ${enrichResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
@@ -341,6 +496,175 @@ export function SettingsPanel() {
               </span>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Scheduled Contact Sync */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10">
+              <Clock className="h-4 w-4 text-purple-500" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Scheduled Contact Sync</CardTitle>
+              <CardDescription>Automatically sync contacts added in the last 5 days from GoHighLevel</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {scheduleLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading schedule...
+            </div>
+          ) : (
+            <>
+              {/* Schedule controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setScheduleEnabled(!scheduleEnabled)}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                    scheduleEnabled
+                      ? "border-purple-500 bg-purple-500 text-white"
+                      : "border-border bg-background hover:bg-muted text-foreground"
+                  }`}
+                >
+                  {scheduleEnabled ? "Enabled" : "Disabled"}
+                </button>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Run at (IST):</label>
+                  <Input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="w-32"
+                  />
+                </div>
+                <Button onClick={handleSaveSchedule} variant="outline" size="sm" className="gap-1.5">
+                  <Save className="size-3.5" />
+                  Save Schedule
+                </Button>
+                {scheduleSaved && (
+                  <span className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                    <CheckCircle2 className="size-3.5" />
+                    Saved
+                  </span>
+                )}
+              </div>
+
+              {/* Manual trigger */}
+              <div className="flex items-center gap-3 pt-1">
+                <Button onClick={handleContactSync} disabled={contactSyncing} variant="outline" className="gap-2">
+                  {contactSyncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                  {contactSyncing ? "Syncing\u2026" : "Sync Now"}
+                </Button>
+                {contactSyncResult && (
+                  <span className={`text-sm font-medium ${contactSyncResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                    {contactSyncResult.message}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Contact Sync History */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/10">
+              <History className="h-4 w-4 text-slate-500" />
+            </div>
+            <div>
+              <CardTitle className="text-base">Contact Sync History</CardTitle>
+              <CardDescription>Recent automated and manual contact sync runs</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {historyLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading history...
+            </div>
+          ) : contactSyncHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No sync runs yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-24">Status</TableHead>
+                    <TableHead className="w-20 text-right">Contacts</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead className="w-20">Duration</TableHead>
+                    <TableHead className="w-20">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {contactSyncHistory.slice(0, 10).map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell>
+                        <Badge
+                          variant={job.status === "completed" ? "default" : job.status === "running" ? "secondary" : "destructive"}
+                          className={
+                            job.status === "completed"
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                              : job.status === "running"
+                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                                : ""
+                          }
+                        >
+                          {job.status === "running" && <Loader2 className="size-3 animate-spin" />}
+                          {job.status}
+                          {job.retryCount > 0 && ` (#${job.retryCount})`}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {job.contactsUpserted ?? 0}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatTime(job.startedAt)}
+                      </TableCell>
+                      <TableCell className="text-sm tabular-nums">
+                        {formatDuration(job.startedAt, job.completedAt)}
+                      </TableCell>
+                      <TableCell>
+                        {job.status === "failed" && (
+                          <Button
+                            onClick={() => handleRetry(job.id)}
+                            disabled={retryingJobId === job.id || contactSyncing}
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1 h-7 text-xs"
+                          >
+                            {retryingJobId === job.id ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RotateCcw className="size-3" />
+                            )}
+                            Retry
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {contactSyncHistory.some((j) => j.status === "failed" && j.errorMessage) && (
+                <div className="mt-3 space-y-1">
+                  {contactSyncHistory
+                    .filter((j) => j.status === "failed" && j.errorMessage)
+                    .slice(0, 3)
+                    .map((j) => (
+                      <p key={j.id} className="text-xs text-red-600 dark:text-red-400 truncate" title={j.errorMessage ?? ""}>
+                        Job #{j.id}: {j.errorMessage}
+                      </p>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
