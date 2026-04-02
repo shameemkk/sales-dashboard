@@ -63,6 +63,8 @@ import {
   Building2,
   CalendarIcon,
   MessageSquare,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
@@ -416,8 +418,11 @@ export function LeadsTable() {
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [tagFilter, setTagFilter] = useState<string>("all");
+  const [contactSyncing, setContactSyncing] = useState(false);
+  const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const contactSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchInput(value);
@@ -494,6 +499,46 @@ export function LeadsTable() {
     });
   }, []);
 
+  const startContactSyncPoll = useCallback(() => {
+    if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current);
+    contactSyncPollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch("/api/contact-sync");
+        const s = await r.json();
+        if (s.status === "completed") {
+          clearInterval(contactSyncPollRef.current!);
+          contactSyncPollRef.current = null;
+          setContactSyncing(false);
+          const e = s.contactsEnriched ? `, enriched ${s.contactsEnriched}` : "";
+          setContactSyncResult({ ok: true, message: `Synced ${s.contactsUpserted ?? 0} contacts${e}` });
+        } else if (s.status === "failed") {
+          clearInterval(contactSyncPollRef.current!);
+          contactSyncPollRef.current = null;
+          setContactSyncing(false);
+          setContactSyncResult({ ok: false, message: s.error ?? "Contact sync failed" });
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current); };
+  }, []);
+
+  const handleContactSync = useCallback(async () => {
+    setContactSyncing(true);
+    setContactSyncResult(null);
+    try {
+      const res = await fetch("/api/contact-sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Contact sync failed");
+      startContactSyncPoll();
+    } catch (err) {
+      setContactSyncing(false);
+      setContactSyncResult({ ok: false, message: err instanceof Error ? err.message : "Contact sync failed" });
+    }
+  }, [startContactSyncPoll]);
+
   // Collect unique tags for filter
   const allTags = useMemo(() => {
     const set = new Set<string>();
@@ -552,6 +597,21 @@ export function LeadsTable() {
 
             {/* Toolbar */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Sync Now */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleContactSync} disabled={contactSyncing} variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+                    {contactSyncing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                    {contactSyncing ? "Syncing…" : "Sync Now"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {contactSyncResult
+                    ? <span className={contactSyncResult.ok ? "text-emerald-400" : "text-red-400"}>{contactSyncResult.message}</span>
+                    : "Sync recent contacts & enrich"}
+                </TooltipContent>
+              </Tooltip>
+
               {/* Date range picker */}
               <Popover>
                 <PopoverTrigger asChild>
