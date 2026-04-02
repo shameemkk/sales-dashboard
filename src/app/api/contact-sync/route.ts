@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
   // When called via cron, check if schedule is enabled
   if (isCron) {
     const { data: config } = await supabaseBg
-      .from("contact_sync_schedule")
+      .from("sync_schedules")
       .select("enabled")
-      .eq("id", 1)
+      .eq("type", "contact_sync")
       .single();
 
     if (!config?.enabled) {
@@ -49,10 +49,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Create job record
+  // Create job record in unified log
   const { data: job, error: jobError } = await supabaseBg
-    .from("contact_sync_jobs")
-    .insert({ status: "running" })
+    .from("sync_execution_log")
+    .insert({ type: "contact_sync", trigger: "manual", status: "running" })
     .select("id")
     .single();
 

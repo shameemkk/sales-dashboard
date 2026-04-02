@@ -72,12 +72,29 @@ export interface Lead {
   firstTextTime: string | null;
 }
 
-export interface ContactSyncJob {
+export type SyncType = "contact_sync" | "performance_sync";
+export type SyncTrigger = "manual" | "scheduled" | "retry";
+
+export interface SyncSchedule {
   id: number;
+  type: SyncType;
+  enabled: boolean;
+  timeUtc: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SyncExecutionLog {
+  id: number;
+  scheduleId: number | null;
+  type: SyncType;
+  trigger: SyncTrigger;
   status: "running" | "completed" | "failed";
   errorMessage: string | null;
-  contactsFetched: number;
-  contactsUpserted: number;
+  contactsFetched: number | null;
+  contactsUpserted: number | null;
+  syncDate: string | null;
+  rowsSynced: number | null;
   retryCount: number;
   startedAt: string;
   completedAt: string | null;

@@ -80,33 +80,41 @@ create policy "Service role can manage leads"
   with check (true);
 
 -- ============================================================
--- Contact Sync Jobs (execution history for scheduled syncs)
+-- Sync Schedules (one row per sync type)
 -- ============================================================
-create table if not exists public.contact_sync_jobs (
-  id              bigint generated always as identity primary key,
-  status          text not null default 'running'
-                    check (status in ('running', 'completed', 'failed')),
-  error_message   text,
-  contacts_fetched integer not null default 0,
-  contacts_upserted integer not null default 0,
-  retry_count     integer not null default 0,
-  started_at      timestamptz not null default now(),
-  completed_at    timestamptz
+create table if not exists public.sync_schedules (
+  id          bigint generated always as identity primary key,
+  type        text not null unique
+                check (type in ('contact_sync', 'performance_sync')),
+  enabled     boolean not null default false,
+  time_utc    text not null default '06:00',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
 );
 
-create index if not exists idx_contact_sync_jobs_started
-  on public.contact_sync_jobs (started_at desc);
-
 -- ============================================================
--- Contact Sync Schedule (single-row config)
+-- Sync Execution Log (unified history for all sync types)
 -- ============================================================
-create table if not exists public.contact_sync_schedule (
-  id         integer primary key default 1 check (id = 1),
-  enabled    boolean not null default false,
-  time_utc   text not null default '06:00',
-  updated_at timestamptz not null default now()
+create table if not exists public.sync_execution_log (
+  id                 bigint generated always as identity primary key,
+  schedule_id        bigint references public.sync_schedules(id) on delete set null,
+  type               text not null
+                       check (type in ('contact_sync', 'performance_sync')),
+  trigger            text not null default 'manual'
+                       check (trigger in ('manual', 'scheduled', 'retry')),
+  status             text not null default 'running'
+                       check (status in ('running', 'completed', 'failed')),
+  error_message      text,
+  contacts_fetched   integer,
+  contacts_upserted  integer,
+  sync_date          text,
+  rows_synced        integer,
+  retry_count        integer not null default 0,
+  started_at         timestamptz not null default now(),
+  completed_at       timestamptz
 );
 
-insert into public.contact_sync_schedule (enabled, time_utc)
-  values (false, '06:00')
-  on conflict (id) do nothing;
+create index if not exists idx_sync_exec_log_type
+  on public.sync_execution_log (type);
+create index if not exists idx_sync_exec_log_started
+  on public.sync_execution_log (started_at desc);

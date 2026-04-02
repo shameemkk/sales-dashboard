@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseBg } from "@/lib/supabase-bg";
 
-export async function GET() {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { session },
@@ -11,37 +14,16 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabaseBg
-    .from("contact_sync_schedule")
-    .select("enabled, time_utc, updated_at")
-    .eq("id", 1)
-    .single();
-
-  if (error) {
-    // Table may not exist yet — return defaults
-    return NextResponse.json({ enabled: false, timeUtc: "06:00" });
-  }
-
-  return NextResponse.json({
-    enabled: data.enabled,
-    timeUtc: data.time_utc,
-    updatedAt: data.updated_at,
-  });
-}
-
-export async function PUT(request: NextRequest) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const scheduleId = parseInt(id, 10);
+  if (isNaN(scheduleId)) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
   const body = await request.json();
   const { enabled, timeUtc } = body;
 
-  // Validate time format HH:MM
+  // Validate time format if provided
   if (timeUtc !== undefined) {
     if (!/^\d{2}:\d{2}$/.test(timeUtc)) {
       return NextResponse.json(
@@ -65,13 +47,48 @@ export async function PUT(request: NextRequest) {
   if (timeUtc !== undefined) updates.time_utc = timeUtc;
 
   const { error } = await supabaseBg
-    .from("contact_sync_schedule")
-    .upsert({ id: 1, ...updates }, { onConflict: "id" });
+    .from("sync_schedules")
+    .update(updates)
+    .eq("id", scheduleId);
 
   if (error) {
-    console.error("[contact-sync] schedule update failed:", error.message);
+    console.error("[schedules] update failed:", error.message);
     return NextResponse.json(
       { error: "Failed to update schedule" },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const scheduleId = parseInt(id, 10);
+  if (isNaN(scheduleId)) {
+    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+  }
+
+  const { error } = await supabaseBg
+    .from("sync_schedules")
+    .delete()
+    .eq("id", scheduleId);
+
+  if (error) {
+    console.error("[schedules] delete failed:", error.message);
+    return NextResponse.json(
+      { error: "Failed to delete schedule" },
       { status: 500 }
     );
   }

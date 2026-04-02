@@ -305,7 +305,7 @@ If no failed pages exist:
 
 ### `POST /api/performance-sync`
 
-Sync performance data for a date range. **Requires secret header.**
+Sync performance data for a date range. **Requires secret header.** Logs execution to `sync_execution_log`.
 
 **Auth:** `x-sync-secret` header must match `SYNC_SECRET` env var
 
@@ -492,17 +492,238 @@ Poll current enrichment status.
 
 ---
 
-## Contact Sync (Scheduled)
+## Sync Schedules
 
-Scheduled sync that fetches contacts added in the last 5 days from GoHighLevel. Independent from the full leads sync above.
+Unified schedule management for all sync types. Replaces the old per-type schedule endpoints (`/api/contact-sync/schedule`).
+
+### `GET /api/schedules`
+
+List all sync schedules.
+
+**Auth:** Supabase session required
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "schedules": [
+    {
+      "id": 1,
+      "type": "contact_sync",
+      "enabled": true,
+      "timeUtc": "06:00",
+      "createdAt": "2026-04-01T12:00:00Z",
+      "updatedAt": "2026-04-01T12:00:00Z"
+    },
+    {
+      "id": 2,
+      "type": "performance_sync",
+      "enabled": false,
+      "timeUtc": "00:30",
+      "createdAt": "2026-04-01T12:00:00Z",
+      "updatedAt": "2026-04-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+> **Note:** `timeUtc` is always stored and returned in UTC. The frontend converts to/from IST (UTC+5:30) for display and shows times in 12-hour AM/PM format.
+
+---
+
+### `POST /api/schedules`
+
+Create a new sync schedule. Uses upsert — one schedule per type.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "type": "contact_sync",
+  "timeUtc": "06:00",
+  "enabled": true
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | string | Yes | `"contact_sync"` or `"performance_sync"` |
+| `timeUtc` | string | No | Time in `HH:MM` format (UTC). Defaults to `"06:00"` |
+| `enabled` | boolean | No | Enable on creation. Defaults to `true` |
+
+**Response `200`**
+```json
+{
+  "ok": true,
+  "schedule": {
+    "id": 1,
+    "type": "contact_sync",
+    "enabled": true,
+    "timeUtc": "06:00",
+    "createdAt": "2026-04-01T12:00:00Z",
+    "updatedAt": "2026-04-01T12:00:00Z"
+  }
+}
+```
+
+**Error `400`** — invalid `type` or `timeUtc` format
+
+---
+
+### `PUT /api/schedules/[id]`
+
+Update an existing schedule (enable/disable, change time).
+
+**Auth:** Supabase session required
+
+**Path Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `id` | number | Yes | Schedule ID |
+
+**Request Body**
+```json
+{
+  "enabled": true,
+  "timeUtc": "08:30"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `enabled` | boolean | No | Enable or disable the schedule |
+| `timeUtc` | string | No | Time in `HH:MM` format (UTC) |
+
+**Response `200`**
+```json
+{ "ok": true }
+```
+
+**Error `400`** — invalid `id` or `timeUtc` format
+
+---
+
+### `DELETE /api/schedules/[id]`
+
+Delete a schedule.
+
+**Auth:** Supabase session required
+
+**Path Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `id` | number | Yes | Schedule ID |
+
+**Response `200`**
+```json
+{ "ok": true }
+```
+
+**Error `400`** — invalid `id`
+
+---
+
+## Sync History
+
+Unified execution log for all sync types. Replaces the old per-type history endpoints (`/api/contact-sync/history`).
+
+### `GET /api/sync-history`
+
+Get recent sync execution history across all types.
+
+**Auth:** Supabase session required
+
+**Query Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `type` | string | No | Filter by `"contact_sync"` or `"performance_sync"`. Omit for all types |
+
+**Response `200`**
+```json
+{
+  "jobs": [
+    {
+      "id": 1,
+      "scheduleId": 1,
+      "type": "contact_sync",
+      "trigger": "scheduled",
+      "status": "completed",
+      "errorMessage": null,
+      "contactsFetched": 47,
+      "contactsUpserted": 47,
+      "syncDate": null,
+      "rowsSynced": null,
+      "retryCount": 0,
+      "startedAt": "2026-04-02T06:00:00Z",
+      "completedAt": "2026-04-02T06:00:12Z"
+    },
+    {
+      "id": 2,
+      "scheduleId": 2,
+      "type": "performance_sync",
+      "trigger": "manual",
+      "status": "completed",
+      "errorMessage": null,
+      "contactsFetched": null,
+      "contactsUpserted": null,
+      "syncDate": "2026-04-01",
+      "rowsSynced": 15,
+      "retryCount": 0,
+      "startedAt": "2026-04-02T07:00:00Z",
+      "completedAt": "2026-04-02T07:01:30Z"
+    }
+  ]
+}
+```
+
+Returns the last 20 jobs ordered by `startedAt` descending.
+
+**`status` values:** `running` | `completed` | `failed`
+**`trigger` values:** `manual` | `scheduled` | `retry`
+
+---
+
+### `POST /api/sync-history/retry`
+
+Retry a failed sync job. Creates a new execution log entry with incremented `retryCount`.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "job_id": 1
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `job_id` | number | Yes | ID of the failed job to retry |
+
+**Response `200`**
+```json
+{ "ok": true, "jobId": 2 }
+```
+
+**Error `400`** — missing `job_id` or job is not in `failed` status
+**Error `404`** — job not found
+
+---
+
+## Contact Sync
 
 ### `POST /api/contact-sync`
 
-Trigger a scheduled contact sync. Supports dual authentication.
+Trigger a contact sync. Fetches contacts added in the last 5 days from GoHighLevel. Logs execution to `sync_execution_log`.
 
 **Auth:** Supabase session (UI) **OR** `x-sync-secret` header (external cron)
 
-When called via `x-sync-secret`, the endpoint checks the `contact_sync_schedule` table — if scheduling is disabled, it returns `{ "skipped": true }` without running.
+When called via `x-sync-secret`, checks the `sync_schedules` table — if the `contact_sync` schedule is disabled, returns `{ "skipped": true }` without running.
 
 **Request Headers** _(for cron/external triggers)_
 
@@ -530,7 +751,7 @@ When called via `x-sync-secret`, the endpoint checks the `contact_sync_schedule`
 
 ### `GET /api/contact-sync`
 
-Poll current contact sync status.
+Poll current contact sync status (in-memory state).
 
 **Auth:** Supabase session required
 
@@ -542,119 +763,12 @@ Poll current contact sync status.
   "status": "completed",
   "jobId": 1,
   "contactsFetched": 47,
-  "contactsUpserted": 47
+  "contactsUpserted": 47,
+  "contactsEnriched": 12
 }
 ```
 
 **`status` values:** `idle` | `running` | `completed` | `failed`
-
----
-
-### `GET /api/contact-sync/history`
-
-Get recent contact sync job history.
-
-**Auth:** Supabase session required
-
-**Query Parameters:** None
-
-**Response `200`**
-```json
-{
-  "jobs": [
-    {
-      "id": 1,
-      "status": "completed",
-      "errorMessage": null,
-      "contactsFetched": 47,
-      "contactsUpserted": 47,
-      "retryCount": 0,
-      "startedAt": "2026-04-02T06:00:00Z",
-      "completedAt": "2026-04-02T06:00:12Z"
-    }
-  ]
-}
-```
-
-Returns the last 20 jobs ordered by `startedAt` descending.
-
-**`status` values:** `running` | `completed` | `failed`
-
----
-
-### `POST /api/contact-sync/retry`
-
-Retry a failed contact sync job. Creates a new job with incremented `retryCount`.
-
-**Auth:** Supabase session required
-
-**Request Body**
-```json
-{
-  "job_id": 1
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `job_id` | number | Yes | ID of the failed job to retry |
-
-**Response `200`**
-```json
-{ "ok": true, "jobId": 2 }
-```
-
-**Error `400`** — missing `job_id` or job is not in `failed` status
-**Error `404`** — job not found
-
----
-
-### `GET /api/contact-sync/schedule`
-
-Get the current schedule configuration.
-
-**Auth:** Supabase session required
-
-**Query Parameters:** None
-
-**Response `200`**
-```json
-{
-  "enabled": false,
-  "timeUtc": "06:00",
-  "updatedAt": "2026-04-01T12:00:00Z"
-}
-```
-
-> **Note:** `timeUtc` is always stored and returned in UTC. The frontend converts to/from IST (UTC+5:30) for display. For example, `"06:00"` UTC is shown as `"11:30"` IST in the Settings UI.
-
----
-
-### `PUT /api/contact-sync/schedule`
-
-Update the schedule configuration.
-
-**Auth:** Supabase session required
-
-**Request Body**
-```json
-{
-  "enabled": true,
-  "timeUtc": "06:00"
-}
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `enabled` | boolean | No | Enable or disable the scheduled sync |
-| `timeUtc` | string | No | Time to run in `HH:MM` format (**UTC**). The frontend converts IST → UTC before sending |
-
-**Response `200`**
-```json
-{ "ok": true }
-```
-
-**Error `400`** — invalid `timeUtc` format (must be `HH:MM` with valid hour/minute)
 
 ---
 

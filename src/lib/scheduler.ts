@@ -1,95 +1,152 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { supabaseBg } from "./supabase-bg";
 import { runContactSync } from "./contact-sync";
+import { runPerformanceSync } from "./performance-sync";
+import { ensureSyncTables } from "./ensure-tables";
 
 let scheduled: ScheduledTask | null = null;
 
+function getYesterday(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
  * Start the in-app scheduler.
- * Runs every minute, checks if current UTC time matches the configured
- * schedule time (hour + minute), and triggers the contact sync if so.
+ * Runs every minute, checks all enabled schedules in `sync_schedules`,
+ * and triggers the appropriate sync when the current UTC time matches.
  */
 export function startScheduler() {
   if (scheduled) return; // already running
 
-  console.log("[scheduler] started — checking schedule every minute");
+  console.log("[scheduler] started — checking schedules every minute");
 
-  // Check every minute if it's time to run
   scheduled = cron.schedule("* * * * *", async () => {
     try {
-      const { data: config, error: configError } = await supabaseBg
-        .from("contact_sync_schedule")
-        .select("enabled, time_utc")
-        .eq("id", 1)
-        .single();
+      await ensureSyncTables();
+
+      // Read all enabled schedules
+      const { data: schedules, error: configError } = await supabaseBg
+        .from("sync_schedules")
+        .select("id, type, time_utc")
+        .eq("enabled", true);
 
       if (configError) {
-        console.error("[scheduler] failed to read config:", configError.message);
+        console.error("[scheduler] failed to read schedules:", configError.message);
         return;
       }
 
-      if (!config?.enabled) return;
+      if (!schedules || schedules.length === 0) return;
 
       const now = new Date();
       const currentUtc = `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
 
-      if (currentUtc !== config.time_utc) return;
+      for (const sched of schedules) {
+        if (sched.time_utc !== currentUtc) continue;
 
-      console.log(`[scheduler] time match! current=${currentUtc} config=${config.time_utc}`);
+        console.log(`[scheduler] time match for ${sched.type}! current=${currentUtc} config=${sched.time_utc}`);
 
-      // Check if scheduler already triggered today (not manual runs — only scheduler jobs)
-      // We skip this check to allow scheduler to run even if manual sync was done earlier
-      // Instead, just check for a running job to prevent concurrent execution
-      const { data: running } = await supabaseBg
-        .from("contact_sync_jobs")
-        .select("id")
-        .eq("status", "running")
-        .limit(1);
+        // Check for running jobs of this type to prevent concurrent execution
+        const { data: running } = await supabaseBg
+          .from("sync_execution_log")
+          .select("id")
+          .eq("type", sched.type)
+          .eq("status", "running")
+          .limit(1);
 
-      if (running && running.length > 0) {
-        console.log("[scheduler] skipping — a sync job is already running");
-        return;
+        if (running && running.length > 0) {
+          console.log(`[scheduler] skipping ${sched.type} — already running`);
+          continue;
+        }
+
+        // Prevent duplicate trigger within the same minute
+        const oneMinuteAgo = new Date(now.getTime() - 60_000);
+        const { data: recent } = await supabaseBg
+          .from("sync_execution_log")
+          .select("id")
+          .eq("type", sched.type)
+          .gte("started_at", oneMinuteAgo.toISOString())
+          .limit(1);
+
+        if (recent && recent.length > 0) {
+          console.log(`[scheduler] skipping ${sched.type} — job already started in the last minute`);
+          continue;
+        }
+
+        // Create execution log entry
+        const insertData: Record<string, unknown> = {
+          schedule_id: sched.id,
+          type: sched.type,
+          trigger: "scheduled",
+          status: "running",
+        };
+
+        // For performance_sync, set the target date to yesterday
+        if (sched.type === "performance_sync") {
+          insertData.sync_date = getYesterday();
+        }
+
+        const { data: job, error } = await supabaseBg
+          .from("sync_execution_log")
+          .insert(insertData)
+          .select("id")
+          .single();
+
+        if (error || !job) {
+          console.error(`[scheduler] failed to create job for ${sched.type}:`, error?.message);
+          continue;
+        }
+
+        console.log(`[scheduler] triggering ${sched.type}, job ${job.id}`);
+
+        // Dispatch based on type
+        if (sched.type === "contact_sync") {
+          runContactSync(job.id)
+            .then((result) => {
+              console.log(
+                `[scheduler] contact_sync job ${job.id} completed: upserted=${result.upserted}, enriched=${result.enriched}`
+              );
+            })
+            .catch((err) => {
+              console.error(
+                `[scheduler] contact_sync job ${job.id} failed:`,
+                err instanceof Error ? err.message : err
+              );
+            });
+        } else if (sched.type === "performance_sync") {
+          const targetDate = getYesterday();
+          runPerformanceSync(targetDate, targetDate)
+            .then(async (rows) => {
+              await supabaseBg
+                .from("sync_execution_log")
+                .update({
+                  status: "completed",
+                  rows_synced: rows.length,
+                  completed_at: new Date().toISOString(),
+                })
+                .eq("id", job.id);
+              console.log(
+                `[scheduler] performance_sync job ${job.id} completed: ${rows.length} rows synced for ${targetDate}`
+              );
+            })
+            .catch(async (err) => {
+              const message = err instanceof Error ? err.message : String(err);
+              await supabaseBg
+                .from("sync_execution_log")
+                .update({
+                  status: "failed",
+                  error_message: message,
+                  completed_at: new Date().toISOString(),
+                })
+                .eq("id", job.id);
+              console.error(
+                `[scheduler] performance_sync job ${job.id} failed:`,
+                message
+              );
+            });
+        }
       }
-
-      // Prevent duplicate trigger within the same minute
-      const oneMinuteAgo = new Date(now.getTime() - 60_000);
-      const { data: recent } = await supabaseBg
-        .from("contact_sync_jobs")
-        .select("id")
-        .gte("started_at", oneMinuteAgo.toISOString())
-        .limit(1);
-
-      if (recent && recent.length > 0) {
-        console.log("[scheduler] skipping — job already started in the last minute");
-        return;
-      }
-
-      // Create job and run
-      const { data: job, error } = await supabaseBg
-        .from("contact_sync_jobs")
-        .insert({ status: "running" })
-        .select("id")
-        .single();
-
-      if (error || !job) {
-        console.error("[scheduler] failed to create job:", error?.message);
-        return;
-      }
-
-      console.log(`[scheduler] triggering scheduled contact sync, job ${job.id}`);
-
-      runContactSync(job.id)
-        .then((result) => {
-          console.log(
-            `[scheduler] job ${job.id} completed: upserted=${result.upserted}, enriched=${result.enriched}`
-          );
-        })
-        .catch((err) => {
-          console.error(
-            "[scheduler] job failed:",
-            err instanceof Error ? err.message : err
-          );
-        });
     } catch (err) {
       console.error(
         "[scheduler] check failed:",

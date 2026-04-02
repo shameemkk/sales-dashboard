@@ -186,9 +186,9 @@ export async function runContactSync(
       }
     }
 
-    // Update job as completed
+    // Update job as completed in unified log
     await supabaseBg
-      .from("contact_sync_jobs")
+      .from("sync_execution_log")
       .update({
         status: "completed",
         contacts_fetched: allContacts.length,
@@ -206,9 +206,9 @@ export async function runContactSync(
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[contact-sync] job ${jobId} FAILED:`, message);
 
-    // Update job as failed
+    // Update job as failed in unified log
     await supabaseBg
-      .from("contact_sync_jobs")
+      .from("sync_execution_log")
       .update({
         status: "failed",
         error_message: message,

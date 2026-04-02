@@ -10,12 +10,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Mail, MessageSquare, CalendarDays, Save, CheckCircle2, RefreshCw,
-  Loader2, Users, Sparkles, Clock, History, RotateCcw, Database, LayoutGrid, Timer,
+  Loader2, Users, Sparkles, Clock, RotateCcw, Database, LayoutGrid, Timer,
+  Plus, Pencil, Trash2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { getDefaultCols, getDefaultTableDays, saveDefaultCols, saveDefaultTableDays } from "@/lib/settings";
-import type { ContactSyncJob } from "@/lib/data";
+import type { SyncSchedule, SyncExecutionLog, SyncType } from "@/lib/data";
 
 const EMAIL_COLS = [
   { key: "totalEmailsSent",       label: "Sent" },
@@ -49,13 +53,25 @@ const DATE_OPTIONS = [
   { value: 90, label: "Last 90 days" },
 ];
 
+const SYNC_TYPE_LABELS: Record<SyncType, string> = {
+  contact_sync: "Contact Sync",
+  performance_sync: "Performance Sync",
+};
+
 const IST_OFFSET = 5 * 60 + 30;
 
-function utcToIst(utcTime: string): string {
+function utcToIst(utcTime: string, use12Hour = false): string {
   const [h, m] = utcTime.split(":").map(Number);
   let totalMin = h * 60 + m + IST_OFFSET;
   if (totalMin >= 1440) totalMin -= 1440;
-  return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+  const hours24 = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (use12Hour) {
+    const period = hours24 >= 12 ? "PM" : "AM";
+    const hours12 = hours24 % 12 || 12;
+    return `${hours12}:${String(mins).padStart(2, "0")} ${period}`;
+  }
+  return `${String(hours24).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 function istToUtc(istTime: string): string {
@@ -104,23 +120,45 @@ export function SettingsPanel() {
   const [enrichResult, setEnrichResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [enrichCounts, setEnrichCounts] = useState<{ enriched: number; total: number } | null>(null);
 
-  const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [scheduleTime, setScheduleTime] = useState("11:30");
-  const [scheduleLoading, setScheduleLoading] = useState(true);
-  const [scheduleSaved, setScheduleSaved] = useState(false);
-  const [contactSyncing, setContactSyncing] = useState(false);
-  const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [contactSyncHistory, setContactSyncHistory] = useState<ContactSyncJob[]>([]);
+  // Unified schedule state
+  const [schedules, setSchedules] = useState<SyncSchedule[]>([]);
+  const [schedulesLoading, setSchedulesLoading] = useState(true);
+  const [schedulerDialogOpen, setSchedulerDialogOpen] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<SyncSchedule | null>(null);
+  const [formType, setFormType] = useState<SyncType>("contact_sync");
+  const [formTime, setFormTime] = useState("11:30");
+  const [formSaving, setFormSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // Unified history state
+  const [syncHistory, setSyncHistory] = useState<SyncExecutionLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null);
-  const [automationDialogOpen, setAutomationDialogOpen] = useState(false);
+
+  // Contact sync polling state
+  const [contactSyncing, setContactSyncing] = useState(false);
+  const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const enrichPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const contactSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const fetchSchedules = useCallback(async () => {
+    try {
+      const r = await fetch("/api/schedules");
+      const data = await r.json();
+      setSchedules(data.schedules ?? []);
+    } catch { /* ignore */ }
+    setSchedulesLoading(false);
+  }, []);
+
   const fetchHistory = useCallback(async () => {
-    try { const r = await fetch("/api/contact-sync/history"); const data = await r.json(); setContactSyncHistory(data.jobs ?? []); } catch { /* ignore */ }
+    try {
+      const r = await fetch("/api/sync-history");
+      const data = await r.json();
+      setSyncHistory(data.jobs ?? []);
+    } catch { /* ignore */ }
     setHistoryLoading(false);
   }, []);
 
@@ -135,14 +173,12 @@ export function SettingsPanel() {
       if (s.status === "running") { setEnriching(true); setEnrichResult({ ok: true, message: `${s.processed}/${s.total} leads enriched\u2026` }); startEnrichPoll(); }
       else if (s.status === "completed") { setEnrichResult({ ok: true, message: `Done! ${s.processed} leads enriched` }); }
     }).catch(() => {});
-    fetch("/api/contact-sync/schedule").then((r) => r.json()).then((s) => {
-      setScheduleEnabled(s.enabled ?? false); setScheduleTime(utcToIst(s.timeUtc ?? "06:00"));
-    }).catch(() => {}).finally(() => setScheduleLoading(false));
     fetch("/api/contact-sync").then((r) => r.json()).then((s) => {
       if (s.status === "running") { setContactSyncing(true); setContactSyncResult({ ok: true, message: "Syncing recent contacts\u2026" }); startContactSyncPoll(); }
       else if (s.status === "completed") { const e = s.contactsEnriched ? `, enriched ${s.contactsEnriched}` : ""; setContactSyncResult({ ok: true, message: `Synced ${s.contactsUpserted ?? 0} contacts${e}` }); }
       else if (s.status === "failed") { setContactSyncResult({ ok: false, message: s.error ?? "Contact sync failed" }); }
     }).catch(() => {});
+    fetchSchedules();
     fetchHistory();
     return () => { if (syncPollRef.current) clearInterval(syncPollRef.current); if (enrichPollRef.current) clearInterval(enrichPollRef.current); if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,9 +217,91 @@ export function SettingsPanel() {
   async function handleLeadsSync() { setSyncing(true); setSyncResult(null); try { const res = await fetch("/api/leads-sync", { method: "POST" }); const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "Sync failed"); startSyncPoll(); } catch (err) { setSyncing(false); setSyncResult({ ok: false, message: err instanceof Error ? err.message : "Sync failed" }); } }
   async function handleEnrich() { setEnriching(true); setEnrichResult(null); try { const res = await fetch("/api/leads-enrich", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }); const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "Enrich failed"); startEnrichPoll(); } catch (err) { setEnriching(false); setEnrichResult({ ok: false, message: err instanceof Error ? err.message : "Enrich failed" }); } }
   async function handleContactSync() { setContactSyncing(true); setContactSyncResult(null); try { const res = await fetch("/api/contact-sync", { method: "POST" }); const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "Contact sync failed"); startContactSyncPoll(); } catch (err) { setContactSyncing(false); setContactSyncResult({ ok: false, message: err instanceof Error ? err.message : "Contact sync failed" }); } }
-  async function handleSaveSchedule() { try { const res = await fetch("/api/contact-sync/schedule", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: scheduleEnabled, timeUtc: istToUtc(scheduleTime) }) }); if (!res.ok) throw new Error("Failed to save"); setScheduleSaved(true); setTimeout(() => setScheduleSaved(false), 3000); } catch { /* ignore */ } }
-  async function handleRetry(jobId: number) { setRetryingJobId(jobId); try { const res = await fetch("/api/contact-sync/retry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job_id: jobId }) }); if (!res.ok) throw new Error("Retry failed"); setContactSyncing(true); setContactSyncResult({ ok: true, message: "Retrying contact sync\u2026" }); startContactSyncPoll(); } catch { /* ignore */ } setRetryingJobId(null); }
   function handleSave() { const toSave = new Set(cols); toSave.add("date"); saveDefaultCols(toSave); saveDefaultTableDays(days); setSaved(true); setTimeout(() => setSaved(false), 3000); }
+
+  /* ── Schedule CRUD ── */
+  function openAddForm() {
+    // Determine which types are available (not yet scheduled)
+    const usedTypes = new Set(schedules.map((s) => s.type));
+    const available: SyncType[] = (["contact_sync", "performance_sync"] as SyncType[]).filter((t) => !usedTypes.has(t));
+    if (available.length === 0) return; // all types scheduled
+    setFormType(available[0]);
+    setFormTime("11:30");
+    setEditingSchedule(null);
+    setShowAddForm(true);
+  }
+
+  function openEditForm(sched: SyncSchedule) {
+    setEditingSchedule(sched);
+    setFormType(sched.type);
+    setFormTime(utcToIst(sched.timeUtc));
+    setShowAddForm(true);
+  }
+
+  async function handleSaveScheduleForm() {
+    setFormSaving(true);
+    try {
+      if (editingSchedule) {
+        // Update existing
+        const res = await fetch(`/api/schedules/${editingSchedule.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timeUtc: istToUtc(formTime) }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+      } else {
+        // Create new
+        const res = await fetch("/api/schedules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: formType, timeUtc: istToUtc(formTime), enabled: true }),
+        });
+        if (!res.ok) throw new Error("Failed to create");
+      }
+      setShowAddForm(false);
+      setEditingSchedule(null);
+      await fetchSchedules();
+    } catch { /* ignore */ }
+    setFormSaving(false);
+  }
+
+  async function handleToggleSchedule(id: number, enabled: boolean) {
+    try {
+      await fetch(`/api/schedules/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      setSchedules((prev) => prev.map((s) => s.id === id ? { ...s, enabled } : s));
+    } catch { /* ignore */ }
+  }
+
+  async function handleDeleteSchedule(id: number) {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/schedules/${id}`, { method: "DELETE" });
+      await fetchSchedules();
+    } catch { /* ignore */ }
+    setDeletingId(null);
+  }
+
+  async function handleRetry(jobId: number) {
+    setRetryingJobId(jobId);
+    try {
+      const res = await fetch("/api/sync-history/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!res.ok) throw new Error("Retry failed");
+      await fetchHistory();
+    } catch { /* ignore */ }
+    setRetryingJobId(null);
+  }
+
+  // Which types can still be added
+  const usedTypes = new Set(schedules.map((s) => s.type));
+  const canAddSchedule = usedTypes.size < 2;
 
   return (
     <div className="flex h-full">
@@ -471,37 +589,51 @@ export function SettingsPanel() {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => setAutomationDialogOpen(true)}
+                  onClick={() => setSchedulerDialogOpen(true)}
                   className="shrink-0 gap-2"
                 >
                   <Timer className="size-4" />
-                  Scheduler
+                  Schedules
                 </Button>
               </div>
 
+              {/* Unified History Table */}
               <Card>
                 <CardContent className="pt-6">
                   {historyLoading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="size-4 animate-spin" /> Loading history...
                     </div>
-                  ) : contactSyncHistory.length === 0 ? (
+                  ) : syncHistory.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No sync runs yet.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-28">Type</TableHead>
                             <TableHead className="w-24">Status</TableHead>
-                            <TableHead className="w-20 text-right">Contacts</TableHead>
+                            <TableHead className="w-28">Details</TableHead>
                             <TableHead>Started</TableHead>
                             <TableHead className="w-20">Duration</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {contactSyncHistory.slice(0, 10).map((job) => (
+                          {syncHistory.slice(0, 15).map((job) => (
                             <TableRow key={job.id}>
+                              <TableCell>
+                                <Badge
+                                  variant="secondary"
+                                  className={
+                                    job.type === "contact_sync"
+                                      ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                                      : "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20"
+                                  }
+                                >
+                                  {job.type === "contact_sync" ? "Contact" : "Performance"}
+                                </Badge>
+                              </TableCell>
                               <TableCell>
                                 <Badge
                                   variant={job.status === "completed" ? "default" : job.status === "running" ? "secondary" : "destructive"}
@@ -518,12 +650,19 @@ export function SettingsPanel() {
                                   {job.retryCount > 0 && ` (#${job.retryCount})`}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right font-medium tabular-nums">{job.contactsUpserted ?? 0}</TableCell>
+                              <TableCell className="text-sm tabular-nums">
+                                {job.type === "contact_sync"
+                                  ? `${job.contactsUpserted ?? 0} contacts`
+                                  : job.syncDate
+                                    ? job.syncDate
+                                    : `${job.rowsSynced ?? 0} rows`
+                                }
+                              </TableCell>
                               <TableCell className="text-sm text-muted-foreground">{formatTime(job.startedAt)}</TableCell>
                               <TableCell className="text-sm tabular-nums">{formatDuration(job.startedAt, job.completedAt)}</TableCell>
                               <TableCell>
                                 {job.status === "failed" && (
-                                  <Button onClick={() => handleRetry(job.id)} disabled={retryingJobId === job.id || contactSyncing} variant="ghost" size="sm" className="gap-1 h-7 text-xs">
+                                  <Button onClick={() => handleRetry(job.id)} disabled={retryingJobId === job.id} variant="ghost" size="sm" className="gap-1 h-7 text-xs">
                                     {retryingJobId === job.id ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
                                     Retry
                                   </Button>
@@ -533,11 +672,11 @@ export function SettingsPanel() {
                           ))}
                         </TableBody>
                       </Table>
-                      {contactSyncHistory.some((j) => j.status === "failed" && j.errorMessage) && (
+                      {syncHistory.some((j) => j.status === "failed" && j.errorMessage) && (
                         <div className="mt-3 space-y-1">
-                          {contactSyncHistory.filter((j) => j.status === "failed" && j.errorMessage).slice(0, 3).map((j) => (
+                          {syncHistory.filter((j) => j.status === "failed" && j.errorMessage).slice(0, 3).map((j) => (
                             <p key={j.id} className="text-xs text-red-600 dark:text-red-400 truncate" title={j.errorMessage ?? ""}>
-                              Job #{j.id}: {j.errorMessage}
+                              Job #{j.id} ({j.type === "contact_sync" ? "Contact" : "Performance"}): {j.errorMessage}
                             </p>
                           ))}
                         </div>
@@ -547,55 +686,132 @@ export function SettingsPanel() {
                 </CardContent>
               </Card>
 
-              {/* ── Automation Settings Dialog ── */}
-              <Dialog open={automationDialogOpen} onOpenChange={setAutomationDialogOpen}>
-                <DialogContent className="sm:max-w-md">
+              {/* ── Schedule Management Dialog ── */}
+              <Dialog open={schedulerDialogOpen} onOpenChange={(open) => { setSchedulerDialogOpen(open); if (!open) { setShowAddForm(false); setEditingSchedule(null); } }}>
+                <DialogContent className="sm:max-w-lg">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <Clock className="size-4 text-purple-500" />
-                      Scheduled Contact Sync
+                      <Timer className="size-4 text-purple-500" />
+                      Sync Schedules
                     </DialogTitle>
                     <DialogDescription>
-                      Auto-syncs contacts from the last 5 days and enriches them
+                      Manage automated daily sync schedules
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-5 pt-2">
-                    {scheduleLoading ? (
+
+                  <div className="space-y-4 pt-2">
+                    {schedulesLoading ? (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" /> Loading schedule...
+                        <Loader2 className="size-4 animate-spin" /> Loading schedules...
                       </div>
+                    ) : showAddForm ? (
+                      <>
+                        {/* Add / Edit form (replaces schedule list) */}
+                        <div className="rounded-lg border border-dashed p-4 space-y-3">
+                          <p className="text-sm font-medium">{editingSchedule ? "Edit Schedule" : "Add Schedule"}</p>
+                          {!editingSchedule && (
+                            <div className="flex items-center gap-2">
+                              <label className="text-sm text-muted-foreground whitespace-nowrap">Type:</label>
+                              <Select value={formType} onValueChange={(v) => setFormType(v as SyncType)}>
+                                <SelectTrigger className="w-48">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(["contact_sync", "performance_sync"] as SyncType[])
+                                    .filter((t) => !usedTypes.has(t))
+                                    .map((t) => (
+                                      <SelectItem key={t} value={t}>
+                                        {SYNC_TYPE_LABELS[t]}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          {editingSchedule && (
+                            <p className="text-xs text-muted-foreground">
+                              {SYNC_TYPE_LABELS[editingSchedule.type]}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm text-muted-foreground whitespace-nowrap">Run at (IST):</label>
+                            <Input
+                              type="time"
+                              value={formTime}
+                              onChange={(e) => setFormTime(e.target.value)}
+                              className="w-32"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button onClick={handleSaveScheduleForm} disabled={formSaving} size="sm" className="gap-1.5">
+                              {formSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                              {editingSchedule ? "Update" : "Create"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => { setShowAddForm(false); setEditingSchedule(null); }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">Enable Schedule</p>
-                            <p className="text-xs text-muted-foreground">Run daily at the configured time</p>
+                        {/* Schedule list */}
+                        {schedules.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-2">No schedules configured yet.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {schedules.map((sched) => (
+                              <div key={sched.id} className="flex items-center gap-3 rounded-lg border p-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <Badge
+                                      variant="secondary"
+                                      className={
+                                        sched.type === "contact_sync"
+                                          ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                                          : "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20"
+                                      }
+                                    >
+                                      {SYNC_TYPE_LABELS[sched.type]}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Daily at {utcToIst(sched.timeUtc, true)} IST
+                                    {sched.type === "performance_sync" && " (syncs yesterday's data)"}
+                                  </p>
+                                </div>
+                                <Switch
+                                  checked={sched.enabled}
+                                  onCheckedChange={(checked) => handleToggleSchedule(sched.id, checked)}
+                                  size="sm"
+                                />
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditForm(sched)}>
+                                  <Pencil className="size-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                  onClick={() => handleDeleteSchedule(sched.id)}
+                                  disabled={deletingId === sched.id}
+                                >
+                                  {deletingId === sched.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                                </Button>
+                              </div>
+                            ))}
                           </div>
-                          <Switch
-                            checked={scheduleEnabled}
-                            onCheckedChange={setScheduleEnabled}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm text-muted-foreground whitespace-nowrap">Run at (IST):</label>
-                          <Input
-                            type="time"
-                            value={scheduleTime}
-                            onChange={(e) => setScheduleTime(e.target.value)}
-                            className="w-32"
-                          />
-                        </div>
-                        <div className="flex items-center gap-3 pt-1">
-                          <Button onClick={handleSaveSchedule} variant="outline" size="sm" className="gap-1.5">
-                            <Save className="size-3.5" />
-                            Save Schedule
+                        )}
+
+                        {canAddSchedule ? (
+                          <Button variant="outline" size="sm" onClick={openAddForm} className="gap-1.5 w-full">
+                            <Plus className="size-3.5" />
+                            Add Schedule
                           </Button>
-                          {scheduleSaved && (
-                            <span className="flex items-center gap-1 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                              <CheckCircle2 className="size-3.5" /> Saved
-                            </span>
-                          )}
-                        </div>
+                        ) : null}
                       </>
                     )}
                   </div>
