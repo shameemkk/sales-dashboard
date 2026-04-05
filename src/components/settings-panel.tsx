@@ -376,7 +376,7 @@ export function SettingsPanel() {
 
   // Which types can still be added
   const usedTypes = new Set(schedules.map((s) => s.type));
-  const canAddSchedule = usedTypes.size < 2;
+  const canAddSchedule = usedTypes.size < 3;
 
   return (
     <div className="flex h-full">
@@ -702,16 +702,19 @@ export function SettingsPanel() {
                               </TableCell>
                               <TableCell>
                                 <Badge
-                                  variant={job.status === "completed" ? "default" : job.status === "running" ? "secondary" : "destructive"}
+                                  variant={job.status === "completed" ? "default" : job.status === "failed" ? "destructive" : "secondary"}
                                   className={
                                     job.status === "completed"
                                       ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
                                       : job.status === "running"
                                         ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                                        : ""
+                                        : job.status === "queued"
+                                          ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                                          : ""
                                   }
                                 >
                                   {job.status === "running" && <Loader2 className="size-3 animate-spin" />}
+                                  {job.status === "queued" && <Clock className="size-3" />}
                                   {job.status}
                                   {job.retryCount > 0 && ` (#${job.retryCount})`}
                                 </Badge>

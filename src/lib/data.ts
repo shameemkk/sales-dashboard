@@ -89,7 +89,7 @@ export interface SyncExecutionLog {
   scheduleId: number | null;
   type: SyncType;
   trigger: SyncTrigger;
-  status: "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed";
   errorMessage: string | null;
   contactsFetched: number | null;
   contactsUpserted: number | null;

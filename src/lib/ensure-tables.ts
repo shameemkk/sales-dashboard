@@ -57,7 +57,7 @@ export async function ensureSyncTables() {
           schedule_id        INT REFERENCES sync_schedules(id) ON DELETE SET NULL,
           type               TEXT NOT NULL CHECK (type IN ('contact_sync', 'performance_sync', 'email_analyzer_sync')),
           trigger            TEXT NOT NULL DEFAULT 'manual' CHECK (trigger IN ('manual', 'scheduled', 'retry')),
-          status             TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
+          status             TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
           error_message      TEXT,
           contacts_fetched   INT,
           contacts_upserted  INT,

@@ -33,3 +33,8 @@ ALTER TABLE sync_execution_log ADD CONSTRAINT sync_execution_log_type_check
 ALTER TABLE sync_schedules DROP CONSTRAINT IF EXISTS sync_schedules_type_check;
 ALTER TABLE sync_schedules ADD CONSTRAINT sync_schedules_type_check
   CHECK (type IN ('contact_sync', 'performance_sync', 'email_analyzer_sync'));
+
+-- Expand sync_execution_log status CHECK to allow 'queued'
+ALTER TABLE sync_execution_log DROP CONSTRAINT IF EXISTS sync_execution_log_status_check;
+ALTER TABLE sync_execution_log ADD CONSTRAINT sync_execution_log_status_check
+  CHECK (status IN ('queued', 'running', 'completed', 'failed'));

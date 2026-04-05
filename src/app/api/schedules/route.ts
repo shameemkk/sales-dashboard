@@ -53,9 +53,9 @@ export async function POST(request: NextRequest) {
   const { type, timeUtc, enabled } = body;
 
   // Validate type
-  if (!type || !["contact_sync", "performance_sync"].includes(type)) {
+  if (!type || !["contact_sync", "performance_sync", "email_analyzer_sync"].includes(type)) {
     return NextResponse.json(
-      { error: "type must be 'contact_sync' or 'performance_sync'" },
+      { error: "type must be 'contact_sync', 'performance_sync', or 'email_analyzer_sync'" },
       { status: 400 }
     );
   }
