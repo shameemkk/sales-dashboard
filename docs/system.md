@@ -118,13 +118,36 @@ Contacts synced from GoHighLevel.
 | `opportunity_id` | text | Associated opportunity ID |
 | `enriched` | boolean | Whether dial/text times have been fetched |
 
+#### `email_performance`
+Per-sender email performance metrics aggregated across workspaces.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | serial (PK) | Auto-increment ID |
+| `workspace_id` | text | Workspace identifier |
+| `workspace_name` | text | Workspace display name |
+| `sender_id` | text | Upstream sender identifier |
+| `email` | text | Email address |
+| `domain` | text | Email domain (extracted from email) |
+| `total_sent` | integer | Total emails sent |
+| `total_replies` | integer | Total replies received |
+| `reply_rate` | numeric(6,2) | Reply rate percentage |
+| `total_bounced` | integer | Total bounced emails |
+| `bounce_rate` | numeric(6,2) | Bounce rate percentage |
+| `warmup_score` | numeric(6,2) | Warmup score (0–100) |
+| `tags` | jsonb | Array of tag objects `[{ id, name }]` |
+| `status` | text | Email account status |
+| `synced_at` | timestamptz | Last sync timestamp |
+
+Unique constraint on `(workspace_id, sender_id)`. Indexes on `domain` and `workspace_id`.
+
 #### `sync_schedules`
 One row per sync type. Controls automated scheduling.
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | bigint (PK) | Auto-increment ID |
-| `type` | text (unique) | `contact_sync` or `performance_sync` |
+| `type` | text (unique) | `contact_sync`, `performance_sync`, or `email_analyzer_sync` |
 | `enabled` | boolean | Whether the schedule is active |
 | `time_utc` | text | Daily run time in `HH:MM` UTC format |
 | `created_at` | timestamptz | Creation timestamp |
@@ -137,9 +160,9 @@ Unified execution history for all sync types.
 |---|---|---|
 | `id` | bigint (PK) | Auto-increment ID |
 | `schedule_id` | bigint (FK, nullable) | References `sync_schedules.id` |
-| `type` | text | `contact_sync` or `performance_sync` |
+| `type` | text | `contact_sync`, `performance_sync`, or `email_analyzer_sync` |
 | `trigger` | text | `manual`, `scheduled`, or `retry` |
-| `status` | text | `running`, `completed`, or `failed` |
+| `status` | text | `queued`, `running`, `completed`, or `failed` |
 | `error_message` | text | Error details (if failed) |
 | `contacts_fetched` | integer | Contacts fetched (contact_sync only) |
 | `contacts_upserted` | integer | Contacts upserted (contact_sync only) |
@@ -172,20 +195,22 @@ Unified execution history for all sync types.
 | **Contact Sync** | GoHighLevel API | `leads` | Manual (UI) / Scheduled / Cron |
 | **Leads Sync** | GoHighLevel API | `leads` | Manual (UI) — full sync |
 | **Leads Enrich** | GoHighLevel Conversations | `leads` (dial/text times) | Manual (UI) |
+| **Email Analyzer Sync** | Instantly API (all workspaces) | `email_performance` | Manual (UI) / Scheduled |
 
 ### Scheduler (`src/lib/scheduler.ts`)
 
-An in-process scheduler using `node-cron` that runs every minute. On each tick it:
+An in-process scheduler using `node-cron` that runs every minute with a sequential job queue. On each tick it:
 
 1. Reads all enabled rows from `sync_schedules`
 2. Compares each schedule's `time_utc` against the current UTC time (`HH:MM`)
-3. If matched, checks for:
-   - Already-running jobs of the same type (skips if found)
-   - Jobs started within the last minute (prevents duplicate triggers)
-4. Creates a new `sync_execution_log` entry with `trigger = "scheduled"`
-5. Dispatches the appropriate sync function (fire-and-forget):
+3. Checks for jobs started within the last minute (prevents duplicate triggers)
+4. Creates a new `sync_execution_log` entry with `trigger = "scheduled"`:
+   - If no job is currently running → status `"running"`, dispatched immediately
+   - If another job is running → status `"queued"`, dispatched when the current job finishes
+5. Jobs are dispatched sequentially via `dispatchJob()` → `processQueue()`:
    - `contact_sync` → `runContactSync(jobId)`
    - `performance_sync` → `runPerformanceSync(yesterday, yesterday)`
+   - `email_analyzer_sync` → `runEmailAnalyzerSync(jobId)`
 
 ### Execution Logging
 
@@ -222,6 +247,7 @@ Root Layout (ThemeProvider → TooltipProvider → SidebarProvider)
         ├── Daily Performance — email stats cards + meeting stats cards
         ├── Performance Table — tabular performance data
         ├── Account Overview — summary cards + sender accounts table
+        ├── Email Analyzer — email/domain performance views with bulk tag ops
         └── Settings (Automation tab)
             ├── Sync History — recent execution log with retry
             └── Sync Schedules dialog — create/edit/delete/toggle schedules
@@ -243,7 +269,7 @@ The Automation section in Settings provides:
    - Add form: select type (only unscheduled types available) + set time
    - Edit form: replaces the list view while editing, with Cancel to return
    - Delete: remove a schedule
-   - Max 2 schedules (one per type)
+   - Max 3 schedules (one per type)
 
 ### Time Display
 - All times stored in UTC in the database
@@ -282,6 +308,12 @@ The Automation section in Settings provides:
 | GET | `/api/sender-emails` | Proxy: sender email list |
 | GET | `/api/tags` | Proxy: tags list |
 | GET | `/api/warmup/[id]` | Warmup stats for sender |
+| GET | `/api/email-analyzer/emails` | Email performance records (paginated) |
+| GET | `/api/email-analyzer/domains` | Domain-aggregated performance |
+| GET | `/api/email-analyzer/sync` | Poll email analyzer sync status |
+| POST | `/api/email-analyzer/sync` | Trigger email analyzer sync |
+| POST | `/api/email-analyzer/tags` | Bulk add tags to senders |
+| DELETE | `/api/email-analyzer/tags` | Bulk remove tags from senders |
 | GET | `/api/leads` | List leads |
 | POST | `/api/leads-sync` | Trigger full leads sync |
 | GET | `/api/leads-sync` | Poll leads sync status |
@@ -305,7 +337,9 @@ Key interfaces in `src/lib/data.ts`:
 - `DailyPerformance` — daily email + meeting metrics
 - `EmailAccount` — sender account with stats
 - `Tag` — tag ID + name
-- `SyncType` — `"contact_sync" | "performance_sync"`
+- `SyncType` — `"contact_sync" | "performance_sync" | "email_analyzer_sync"`
 - `SyncTrigger` — `"manual" | "scheduled" | "retry"`
 - `SyncSchedule` — schedule config (id, type, enabled, timeUtc)
-- `SyncExecutionLog` — execution log entry with full job details
+- `SyncExecutionLog` — execution log entry with full job details (status includes `"queued"`)
+- `EmailPerformance` — per-sender email performance metrics (id, workspaceId, email, domain, rates, warmupScore, tags)
+- `DomainPerformance` — aggregated domain metrics (domain, totalEmails, avgWarmupScore, avgReplyRate, avgBounceRate)

@@ -549,7 +549,7 @@ Create a new sync schedule. Uses upsert — one schedule per type.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | string | Yes | `"contact_sync"` or `"performance_sync"` |
+| `type` | string | Yes | `"contact_sync"`, `"performance_sync"`, or `"email_analyzer_sync"` |
 | `timeUtc` | string | No | Time in `HH:MM` format (UTC). Defaults to `"06:00"` |
 | `enabled` | boolean | No | Enable on creation. Defaults to `true` |
 
@@ -641,7 +641,9 @@ Get recent sync execution history across all types.
 
 | Param | Type | Required | Description |
 |---|---|---|---|
-| `type` | string | No | Filter by `"contact_sync"` or `"performance_sync"`. Omit for all types |
+| `type` | string | No | Filter by `"contact_sync"`, `"performance_sync"`, or `"email_analyzer_sync"`. Omit for all types |
+| `page` | number | No | Page number (default: `1`) |
+| `limit` | number | No | Results per page (default: `5`, max: `50`) |
 
 **Response `200`**
 ```json
@@ -661,29 +663,18 @@ Get recent sync execution history across all types.
       "retryCount": 0,
       "startedAt": "2026-04-02T06:00:00Z",
       "completedAt": "2026-04-02T06:00:12Z"
-    },
-    {
-      "id": 2,
-      "scheduleId": 2,
-      "type": "performance_sync",
-      "trigger": "manual",
-      "status": "completed",
-      "errorMessage": null,
-      "contactsFetched": null,
-      "contactsUpserted": null,
-      "syncDate": "2026-04-01",
-      "rowsSynced": 15,
-      "retryCount": 0,
-      "startedAt": "2026-04-02T07:00:00Z",
-      "completedAt": "2026-04-02T07:01:30Z"
     }
-  ]
+  ],
+  "page": 1,
+  "limit": 5,
+  "totalCount": 42,
+  "totalPages": 9
 }
 ```
 
-Returns the last 20 jobs ordered by `startedAt` descending.
+Returns jobs ordered by `startedAt` descending, paginated.
 
-**`status` values:** `running` | `completed` | `failed`
+**`status` values:** `queued` | `running` | `completed` | `failed`
 **`trigger` values:** `manual` | `scheduled` | `retry`
 
 ---
@@ -769,6 +760,196 @@ Poll current contact sync status (in-memory state).
 ```
 
 **`status` values:** `idle` | `running` | `completed` | `failed`
+
+---
+
+## Email Analyzer
+
+### `GET /api/email-analyzer/emails`
+
+List email sender performance records with pagination, filtering, and sorting.
+
+**Auth:** Supabase session (server-side)
+
+**Query Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `page` | number | No | Page number (default: `1`) |
+| `limit` | number | No | Results per page (default: `25`, max: `100`) |
+| `sort_by` | string | No | Sort field: `email`, `domain`, `warmup_score`, `reply_rate`, `bounce_rate`, `total_sent`, `total_replies` (default: `email`) |
+| `sort_dir` | string | No | `asc` or `desc` (default: `asc`) |
+| `workspace_id` | string | No | Filter by workspace |
+| `search` | string | No | Case-insensitive email search |
+| `tag_ids[]` | number[] | No | Filter by tag IDs (OR logic) |
+
+**Response `200`**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "workspaceId": "ws_123",
+      "workspaceName": "Main",
+      "senderId": "s_456",
+      "email": "user@example.com",
+      "domain": "example.com",
+      "totalSent": 500,
+      "totalReplies": 25,
+      "replyRate": 5.0,
+      "totalBounced": 10,
+      "bounceRate": 2.0,
+      "warmupScore": 85.5,
+      "tags": [{ "id": 3, "name": "Tag A" }],
+      "status": "active",
+      "syncedAt": "2026-04-02T10:00:00Z"
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 5,
+    "per_page": 25,
+    "total": 120
+  }
+}
+```
+
+---
+
+### `GET /api/email-analyzer/domains`
+
+Aggregated email performance metrics grouped by domain.
+
+**Auth:** Supabase session (server-side)
+
+**Query Parameters**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `page` | number | No | Page number (default: `1`) |
+| `limit` | number | No | Results per page (default: `25`, max: `100`) |
+| `sort_by` | string | No | Sort field: `domain`, `totalEmails`, `avgWarmupScore`, `avgReplyRate`, `avgBounceRate` (default: `domain`) |
+| `sort_dir` | string | No | `asc` or `desc` (default: `asc`) |
+| `workspace_id` | string | No | Filter by workspace |
+| `search` | string | No | Case-insensitive domain search |
+
+**Response `200`**
+```json
+{
+  "data": [
+    {
+      "domain": "example.com",
+      "totalEmails": 12,
+      "avgWarmupScore": 82.3,
+      "avgReplyRate": 4.5,
+      "avgBounceRate": 1.8
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 3,
+    "per_page": 25,
+    "total": 60
+  }
+}
+```
+
+---
+
+### `GET /api/email-analyzer/sync`
+
+Poll email analyzer sync status.
+
+**Auth:** None (status check)
+
+**Query Parameters:** None
+
+**Response `200`**
+```json
+{
+  "syncStatus": "completed",
+  "jobId": 5,
+  "latestJob": {
+    "id": 5,
+    "type": "email_analyzer_sync",
+    "status": "completed",
+    "startedAt": "2026-04-02T10:00:00Z",
+    "completedAt": "2026-04-02T10:02:30Z"
+  }
+}
+```
+
+**`syncStatus` values:** `idle` | `running` | `completed` | `failed`
+
+---
+
+### `POST /api/email-analyzer/sync`
+
+Trigger email analyzer sync across all enabled workspaces.
+
+**Auth:** Supabase session required
+
+**Request Body:** None
+
+**Response `200`**
+```json
+{ "ok": true, "jobId": 5 }
+```
+
+**Error `401`** — not authenticated
+**Error `409`** — sync already in progress
+
+---
+
+### `POST /api/email-analyzer/tags`
+
+Bulk add tags to email senders via upstream API.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "senderIds": ["s_1", "s_2"],
+  "tagIds": [3, 7]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `senderIds` | string[] | Yes | Sender IDs to tag |
+| `tagIds` | number[] | Yes | Tag IDs to add |
+
+**Response `200`**
+```json
+{ "ok": true, "updated": 2 }
+```
+
+---
+
+### `DELETE /api/email-analyzer/tags`
+
+Bulk remove tags from email senders via upstream API.
+
+**Auth:** Supabase session required
+
+**Request Body**
+```json
+{
+  "senderIds": ["s_1", "s_2"],
+  "tagIds": [3]
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `senderIds` | string[] | Yes | Sender IDs to untag |
+| `tagIds` | number[] | Yes | Tag IDs to remove |
+
+**Response `200`**
+```json
+{ "ok": true, "updated": 2 }
+```
 
 ---
 
