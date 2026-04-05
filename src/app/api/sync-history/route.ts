@@ -15,18 +15,27 @@ export async function GET(request: NextRequest) {
   await ensureSyncTables();
 
   const type = request.nextUrl.searchParams.get("type");
+  const page = Math.max(1, Number(request.nextUrl.searchParams.get("page")) || 1);
+  const limit = Math.max(1, Math.min(50, Number(request.nextUrl.searchParams.get("limit")) || 5));
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  let countQuery = supabaseBg
+    .from("sync_execution_log")
+    .select("id", { count: "exact", head: true });
 
   let query = supabaseBg
     .from("sync_execution_log")
     .select("*")
     .order("started_at", { ascending: false })
-    .limit(20);
+    .range(from, to);
 
   if (type && ["contact_sync", "performance_sync"].includes(type)) {
+    countQuery = countQuery.eq("type", type);
     query = query.eq("type", type);
   }
 
-  const { data, error } = await query;
+  const [{ count }, { data, error }] = await Promise.all([countQuery, query]);
 
   if (error) {
     console.error("[sync-history] query failed:", error.message);
@@ -35,6 +44,9 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  const totalCount = count ?? 0;
+  const totalPages = Math.ceil(totalCount / limit);
 
   const jobs = (data ?? []).map((row) => ({
     id: row.id,
@@ -52,5 +64,5 @@ export async function GET(request: NextRequest) {
     completedAt: row.completed_at,
   }));
 
-  return NextResponse.json({ jobs });
+  return NextResponse.json({ jobs, page, limit, totalCount, totalPages });
 }

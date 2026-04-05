@@ -135,6 +135,10 @@ export function SettingsPanel() {
   // Unified history state
   const [syncHistory, setSyncHistory] = useState<SyncExecutionLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [histPage, setHistPage] = useState(1);
+  const [histTotalPages, setHistTotalPages] = useState(1);
+  const [histTotalCount, setHistTotalCount] = useState(0);
+  const [histPaging, setHistPaging] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null);
 
   // Contact sync polling state
@@ -179,12 +183,17 @@ export function SettingsPanel() {
     setSchedulesLoading(false);
   }, []);
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (page = 1) => {
+    setHistPaging(true);
     try {
-      const r = await fetch("/api/sync-history");
+      const r = await fetch(`/api/sync-history?page=${page}&limit=5`);
       const data = await r.json();
       setSyncHistory(data.jobs ?? []);
+      setHistPage(data.page ?? 1);
+      setHistTotalPages(data.totalPages ?? 1);
+      setHistTotalCount(data.totalCount ?? 0);
     } catch { /* ignore */ }
+    setHistPaging(false);
     setHistoryLoading(false);
   }, []);
 
@@ -679,7 +688,7 @@ export function SettingsPanel() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {syncHistory.slice(0, 15).map((job) => (
+                          {syncHistory.map((job) => (
                             <TableRow key={job.id}>
                               <TableCell>
                                 <Badge
@@ -738,6 +747,35 @@ export function SettingsPanel() {
                               Job #{j.id} ({j.type === "contact_sync" ? "Contact" : "Performance"}): {j.errorMessage}
                             </p>
                           ))}
+                        </div>
+                      )}
+                      {histTotalPages > 1 && (
+                        <div className="flex items-center justify-between pt-4">
+                          <p className="text-sm text-muted-foreground">
+                            Page {histPage} of {histTotalPages} ({histTotalCount} total)
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={histPage <= 1 || histPaging}
+                              onClick={() => fetchHistory(histPage - 1)}
+                              className="gap-1.5"
+                            >
+                              {histPaging && histPage > 1 && <Loader2 className="size-3 animate-spin" />}
+                              Previous
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={histPage >= histTotalPages || histPaging}
+                              onClick={() => fetchHistory(histPage + 1)}
+                              className="gap-1.5"
+                            >
+                              Next
+                              {histPaging && histPage < histTotalPages && <Loader2 className="size-3 animate-spin" />}
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -948,7 +986,7 @@ export function SettingsPanel() {
                               <TableCell className="text-xs text-muted-foreground font-mono">{ws.id}</TableCell>
                               <TableCell>
                                 <Badge variant={ws.hasToken ? "default" : "destructive"}>
-                                  {ws.hasToken ? "Connected" : "Not Available"}
+                                  {ws.hasToken ? "Created" : "Not Available"}
                                 </Badge>
                               </TableCell>
                             </TableRow>
