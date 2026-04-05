@@ -100,3 +100,12 @@ export interface SyncExecutionLog {
   completedAt: string | null;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  hasToken: boolean;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+

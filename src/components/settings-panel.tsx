@@ -15,11 +15,11 @@ import {
 import {
   Mail, MessageSquare, CalendarDays, Save, CheckCircle2, RefreshCw,
   Loader2, Users, Sparkles, Clock, RotateCcw, Database, LayoutGrid, Timer,
-  Plus, Pencil, Trash2,
+  Plus, Pencil, Trash2, Key,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { getDefaultCols, getDefaultTableDays, saveDefaultCols, saveDefaultTableDays } from "@/lib/settings";
-import type { SyncSchedule, SyncExecutionLog, SyncType } from "@/lib/data";
+import type { SyncSchedule, SyncExecutionLog, SyncType, Workspace } from "@/lib/data";
 
 const EMAIL_COLS = [
   { key: "totalEmailsSent",       label: "Sent" },
@@ -97,13 +97,14 @@ function formatTime(iso: string): string {
 }
 
 /* ── Nav items ───────────────────────────────────────────────────── */
-type SettingsSection = "display" | "data" | "automation";
+type SettingsSection = "display" | "data" | "automation" | "tokens";
 type DisplaySubSection = null | "performance-table";
 
 const NAV_ITEMS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }>; description: string }[] = [
   { id: "display",    label: "Display",    icon: LayoutGrid, description: "Table defaults" },
   { id: "data",       label: "Data",       icon: Database,   description: "Sync & enrich" },
   { id: "automation", label: "Automation", icon: Clock,      description: "Scheduler" },
+  { id: "tokens",     label: "Tokens",     icon: Key,        description: "API tokens" },
 ];
 
 export function SettingsPanel() {
@@ -140,9 +141,34 @@ export function SettingsPanel() {
   const [contactSyncing, setContactSyncing] = useState(false);
   const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
 
+  // Workspace tokens state
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
+  const [workspaceRefreshing, setWorkspaceRefreshing] = useState(false);
+  const [workspaceResult, setWorkspaceResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [wsPage, setWsPage] = useState(1);
+  const [wsTotalPages, setWsTotalPages] = useState(1);
+  const [wsTotalCount, setWsTotalCount] = useState(0);
+  const [wsPaging, setWsPaging] = useState(false);
+
   const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const enrichPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const contactSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const workspacePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchWorkspaces = useCallback(async (page = 1) => {
+    setWsPaging(true);
+    try {
+      const r = await fetch(`/api/workspaces?page=${page}&limit=5`);
+      const data = await r.json();
+      setWorkspaces(data.workspaces ?? []);
+      setWsPage(data.page ?? 1);
+      setWsTotalPages(data.totalPages ?? 1);
+      setWsTotalCount(data.totalCount ?? 0);
+    } catch { /* ignore */ }
+    setWsPaging(false);
+    setWorkspacesLoading(false);
+  }, []);
 
   const fetchSchedules = useCallback(async () => {
     try {
@@ -180,7 +206,8 @@ export function SettingsPanel() {
     }).catch(() => {});
     fetchSchedules();
     fetchHistory();
-    return () => { if (syncPollRef.current) clearInterval(syncPollRef.current); if (enrichPollRef.current) clearInterval(enrichPollRef.current); if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current); };
+    fetchWorkspaces();
+    return () => { if (syncPollRef.current) clearInterval(syncPollRef.current); if (enrichPollRef.current) clearInterval(enrichPollRef.current); if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current); if (workspacePollRef.current) clearInterval(workspacePollRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -211,6 +238,38 @@ export function SettingsPanel() {
         else if (s.status === "failed") { clearInterval(contactSyncPollRef.current!); contactSyncPollRef.current = null; setContactSyncing(false); setContactSyncResult({ ok: false, message: s.error ?? "Contact sync failed" }); fetchHistory(); }
       } catch { /* ignore */ }
     }, 3000);
+  }
+
+  function startWorkspacePoll() {
+    if (workspacePollRef.current) clearInterval(workspacePollRef.current);
+    workspacePollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch("/api/workspaces?page=1&limit=5");
+        const s = await r.json();
+        if (s.syncStatus === "completed") {
+          clearInterval(workspacePollRef.current!); workspacePollRef.current = null;
+          setWorkspaceRefreshing(false);
+          setWsPage(1);
+          setWsTotalPages(s.totalPages ?? 1);
+          setWsTotalCount(s.totalCount ?? 0);
+          setWorkspaces(s.workspaces ?? []);
+          setWorkspaceResult({ ok: true, message: `Refreshed ${s.totalCount ?? 0} workspaces, created ${s.tokensCreated ?? 0} tokens` });
+        } else if (s.syncStatus === "failed") {
+          clearInterval(workspacePollRef.current!); workspacePollRef.current = null;
+          setWorkspaceRefreshing(false);
+          setWorkspaceResult({ ok: false, message: s.error ?? "Refresh failed" });
+        }
+      } catch { /* ignore */ }
+    }, 3000);
+  }
+  async function handleWorkspaceRefresh() {
+    setWorkspaceRefreshing(true); setWorkspaceResult(null);
+    try {
+      const res = await fetch("/api/workspaces", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Refresh failed");
+      startWorkspacePoll();
+    } catch (err) { setWorkspaceRefreshing(false); setWorkspaceResult({ ok: false, message: err instanceof Error ? err.message : "Refresh failed" }); }
   }
 
   function toggle(key: string) { setCols((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; }); setSaved(false); }
@@ -817,6 +876,118 @@ export function SettingsPanel() {
                   </div>
                 </DialogContent>
               </Dialog>
+            </>
+          )}
+
+          {/* ═══ Workspace Tokens ═══ */}
+          {activeSection === "tokens" && (
+            <>
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+                  <Key className="size-5" />
+                  Workspace Tokens
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Manage API tokens for Instantly workspaces
+                </p>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Workspaces</CardTitle>
+                      <CardDescription>{wsTotalCount} workspaces in database</CardDescription>
+                    </div>
+                    <Button onClick={handleWorkspaceRefresh} disabled={workspaceRefreshing} className="gap-2">
+                      {workspaceRefreshing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+                      {workspaceRefreshing ? "Refreshing..." : "Refresh & Create"}
+                    </Button>
+                  </div>
+                  {workspaceResult && (
+                    <p className={`text-sm font-medium mt-2 ${workspaceResult.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                      {workspaceResult.message}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {workspacesLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin" /> Loading workspaces...
+                    </div>
+                  ) : workspaces.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No workspaces found. Click &quot;Refresh &amp; Create&quot; to fetch from API.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Enabled</TableHead>
+                            <TableHead>Workspace Name</TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>API Token</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {workspaces.map((ws) => (
+                            <TableRow key={ws.id} className={ws.enabled ? "" : "opacity-50"}>
+                              <TableCell>
+                                <Switch
+                                  checked={ws.enabled}
+                                  onCheckedChange={async (checked) => {
+                                    setWorkspaces((prev) => prev.map((w) => w.id === ws.id ? { ...w, enabled: checked } : w));
+                                    await fetch("/api/workspaces", {
+                                      method: "PATCH",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ id: ws.id, enabled: checked }),
+                                    });
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium">{ws.name}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground font-mono">{ws.id}</TableCell>
+                              <TableCell>
+                                <Badge variant={ws.hasToken ? "default" : "destructive"}>
+                                  {ws.hasToken ? "Connected" : "Not Available"}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {wsTotalPages > 1 && (
+                        <div className="flex items-center justify-between pt-4">
+                          <p className="text-sm text-muted-foreground">
+                            Page {wsPage} of {wsTotalPages}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={wsPage <= 1 || wsPaging}
+                              onClick={() => fetchWorkspaces(wsPage - 1)}
+                              className="gap-1.5"
+                            >
+                              {wsPaging && wsPage > 1 && <Loader2 className="size-3 animate-spin" />}
+                              Previous
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={wsPage >= wsTotalPages || wsPaging}
+                              onClick={() => fetchWorkspaces(wsPage + 1)}
+                              className="gap-1.5"
+                            >
+                              Next
+                              {wsPaging && wsPage < wsTotalPages && <Loader2 className="size-3 animate-spin" />}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
         </div>

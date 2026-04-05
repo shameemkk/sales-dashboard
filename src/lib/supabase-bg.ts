@@ -4,5 +4,5 @@ import { createClient } from "@supabase/supabase-js";
 // Does not require cookies. RLS must be disabled (or service role key used) for write access.
 export const supabaseBg = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
