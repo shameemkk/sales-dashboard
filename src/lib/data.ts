@@ -72,7 +72,7 @@ export interface Lead {
   firstTextTime: string | null;
 }
 
-export type SyncType = "contact_sync" | "performance_sync";
+export type SyncType = "contact_sync" | "performance_sync" | "email_analyzer_sync";
 export type SyncTrigger = "manual" | "scheduled" | "retry";
 
 export interface SyncSchedule {
@@ -107,5 +107,31 @@ export interface Workspace {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmailPerformance {
+  id: number;
+  workspaceId: string;
+  workspaceName: string | null;
+  senderId: string;
+  email: string;
+  domain: string;
+  totalSent: number;
+  totalReplies: number;
+  replyRate: number;
+  totalBounced: number;
+  bounceRate: number;
+  warmupScore: number;
+  tags: Tag[];
+  status: string | null;
+  syncedAt: string;
+}
+
+export interface DomainPerformance {
+  domain: string;
+  totalEmails: number;
+  avgWarmupScore: number;
+  avgReplyRate: number;
+  avgBounceRate: number;
 }
 

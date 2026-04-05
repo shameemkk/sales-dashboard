@@ -21,6 +21,7 @@ import { TableClient } from "@/components/table-client";
 import { AccountOverview } from "@/components/account-overview";
 import { LeadsTable } from "@/components/leads-table";
 import { SettingsPanel } from "@/components/settings-panel";
+import { EmailAnalyzer } from "@/components/email-analyzer";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -29,11 +30,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { logoutAction } from "@/app/actions";
-import { TrendingUp, TableIcon, Users, LogOut, Settings, Contact } from "lucide-react";
+import { TrendingUp, TableIcon, Users, LogOut, Settings, Contact, Activity } from "lucide-react";
 import Image from "next/image";
 import { getDefaultTableDays } from "@/lib/settings";
 
-type Section = "performance-table" | "daily-performance" | "account-overview" | "leads" | "settings";
+type Section = "performance-table" | "daily-performance" | "account-overview" | "leads" | "email-analyzer" | "settings";
 
 const navItems: {
   id: Section;
@@ -44,6 +45,7 @@ const navItems: {
   { id: "performance-table", label: "Performance Table", icon: TableIcon },
   { id: "account-overview", label: "Account Overview", icon: Users },
   { id: "leads", label: "Leads", icon: Contact },
+  { id: "email-analyzer", label: "Email Analyzer", icon: Activity },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -185,6 +187,13 @@ export function DashboardTabs() {
         {active === "leads" && (
           <main className="w-full px-2 py-3">
             <LeadsTable />
+          </main>
+        )}
+
+        {/* Email Analyzer */}
+        {active === "email-analyzer" && (
+          <main className="w-full px-2 py-3">
+            <EmailAnalyzer />
           </main>
         )}
 

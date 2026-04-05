@@ -32,7 +32,7 @@ export async function ensureSyncTables() {
       query: `
         CREATE TABLE IF NOT EXISTS sync_schedules (
           id          SERIAL PRIMARY KEY,
-          type        TEXT NOT NULL UNIQUE CHECK (type IN ('contact_sync', 'performance_sync')),
+          type        TEXT NOT NULL UNIQUE CHECK (type IN ('contact_sync', 'performance_sync', 'email_analyzer_sync')),
           enabled     BOOLEAN NOT NULL DEFAULT false,
           time_utc    TEXT NOT NULL DEFAULT '06:00',
           created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -55,7 +55,7 @@ export async function ensureSyncTables() {
         CREATE TABLE IF NOT EXISTS sync_execution_log (
           id                 SERIAL PRIMARY KEY,
           schedule_id        INT REFERENCES sync_schedules(id) ON DELETE SET NULL,
-          type               TEXT NOT NULL CHECK (type IN ('contact_sync', 'performance_sync')),
+          type               TEXT NOT NULL CHECK (type IN ('contact_sync', 'performance_sync', 'email_analyzer_sync')),
           trigger            TEXT NOT NULL DEFAULT 'manual' CHECK (trigger IN ('manual', 'scheduled', 'retry')),
           status             TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
           error_message      TEXT,

@@ -54,8 +54,15 @@ const DATE_OPTIONS = [
 ];
 
 const SYNC_TYPE_LABELS: Record<SyncType, string> = {
-  contact_sync: "Contact Sync",
-  performance_sync: "Performance Sync",
+  contact_sync: "Contact",
+  performance_sync: "Performance",
+  email_analyzer_sync: "Email Performance",
+};
+
+const SYNC_TYPE_BADGE_CLASSES: Record<SyncType, string> = {
+  contact_sync: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  performance_sync: "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20",
+  email_analyzer_sync: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
 };
 
 const IST_OFFSET = 5 * 60 + 30;
@@ -291,7 +298,7 @@ export function SettingsPanel() {
   function openAddForm() {
     // Determine which types are available (not yet scheduled)
     const usedTypes = new Set(schedules.map((s) => s.type));
-    const available: SyncType[] = (["contact_sync", "performance_sync"] as SyncType[]).filter((t) => !usedTypes.has(t));
+    const available: SyncType[] = (["contact_sync", "performance_sync", "email_analyzer_sync"] as SyncType[]).filter((t) => !usedTypes.has(t));
     if (available.length === 0) return; // all types scheduled
     setFormType(available[0]);
     setFormTime("11:30");
@@ -429,7 +436,7 @@ export function SettingsPanel() {
 
       {/* ── Content area ─────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-2xl px-6 py-8 md:px-8 space-y-6 md:pt-8 pt-16">
+        <div className={`w-full px-6 py-8 md:px-8 space-y-6 md:pt-8 pt-16 ${activeSection === "automation" ? "max-w-4xl" : "max-w-2xl"}`}>
 
           {/* ═══ Display Preferences ═══ */}
           {activeSection === "display" && (
@@ -679,28 +686,19 @@ export function SettingsPanel() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-28">Type</TableHead>
-                            <TableHead className="w-24">Status</TableHead>
-                            <TableHead className="w-28">Details</TableHead>
-                            <TableHead>Started</TableHead>
-                            <TableHead className="w-20">Duration</TableHead>
+                            <TableHead className="w-36">Type</TableHead>
+                            <TableHead className="w-28">Status</TableHead>
+                            <TableHead className="min-w-36">Details</TableHead>
+                            <TableHead className="min-w-40">Started</TableHead>
+                            <TableHead className="w-24">Duration</TableHead>
                             <TableHead className="w-20">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {syncHistory.map((job) => (
                             <TableRow key={job.id}>
-                              <TableCell>
-                                <Badge
-                                  variant="secondary"
-                                  className={
-                                    job.type === "contact_sync"
-                                      ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
-                                      : "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20"
-                                  }
-                                >
-                                  {job.type === "contact_sync" ? "Contact" : "Performance"}
-                                </Badge>
+                              <TableCell className="text-sm font-medium">
+                                {SYNC_TYPE_LABELS[job.type]}
                               </TableCell>
                               <TableCell>
                                 <Badge
@@ -721,9 +719,11 @@ export function SettingsPanel() {
                               <TableCell className="text-sm tabular-nums">
                                 {job.type === "contact_sync"
                                   ? `${job.contactsUpserted ?? 0} contacts`
-                                  : job.syncDate
-                                    ? job.syncDate
-                                    : `${job.rowsSynced ?? 0} rows`
+                                  : job.type === "email_analyzer_sync"
+                                    ? `${job.contactsFetched ?? 0} workspaces · ${job.rowsSynced ?? 0} emails`
+                                    : job.syncDate
+                                      ? job.syncDate
+                                      : `${job.rowsSynced ?? 0} rows`
                                 }
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground">{formatTime(job.startedAt)}</TableCell>
@@ -744,7 +744,7 @@ export function SettingsPanel() {
                         <div className="mt-3 space-y-1">
                           {syncHistory.filter((j) => j.status === "failed" && j.errorMessage).slice(0, 3).map((j) => (
                             <p key={j.id} className="text-xs text-red-600 dark:text-red-400 truncate" title={j.errorMessage ?? ""}>
-                              Job #{j.id} ({j.type === "contact_sync" ? "Contact" : "Performance"}): {j.errorMessage}
+                              Job #{j.id} ({SYNC_TYPE_LABELS[j.type]}): {j.errorMessage}
                             </p>
                           ))}
                         </div>
@@ -814,7 +814,7 @@ export function SettingsPanel() {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {(["contact_sync", "performance_sync"] as SyncType[])
+                                  {(["contact_sync", "performance_sync", "email_analyzer_sync"] as SyncType[])
                                     .filter((t) => !usedTypes.has(t))
                                     .map((t) => (
                                       <SelectItem key={t} value={t}>
@@ -867,11 +867,7 @@ export function SettingsPanel() {
                                   <div className="flex items-center gap-2">
                                     <Badge
                                       variant="secondary"
-                                      className={
-                                        sched.type === "contact_sync"
-                                          ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/20"
-                                          : "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/20"
-                                      }
+                                      className={SYNC_TYPE_BADGE_CLASSES[sched.type]}
                                     >
                                       {SYNC_TYPE_LABELS[sched.type]}
                                     </Badge>
