@@ -18,6 +18,7 @@ interface Props {
   selectedCount: number;
   selectedSenderIds: string[];
   tags: Tag[];
+  existingTags: Tag[];
   onClearSelection: () => void;
   onTagsUpdated: () => void;
 }
@@ -26,6 +27,7 @@ export function BulkActionBar({
   selectedCount,
   selectedSenderIds,
   tags,
+  existingTags,
   onClearSelection,
   onTagsUpdated,
 }: Props) {
@@ -163,17 +165,17 @@ export function BulkActionBar({
         </DialogContent>
       </Dialog>
 
-      {/* Remove Tags Dialog */}
+      {/* Remove Tags Dialog — only shows tags that exist on selected emails */}
       <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Remove Tags from {selectedCount} Email{selectedCount !== 1 ? "s" : ""}</DialogTitle>
           </DialogHeader>
           <div className="max-h-64 overflow-y-auto space-y-2 py-2">
-            {tags.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No tags available</p>
+            {existingTags.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No tags on selected emails</p>
             ) : (
-              tags.map((tag) => (
+              existingTags.map((tag) => (
                 <label
                   key={tag.id}
                   className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-muted/50 cursor-pointer"

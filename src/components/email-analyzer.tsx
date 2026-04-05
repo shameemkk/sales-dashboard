@@ -266,6 +266,20 @@ export function EmailAnalyzer() {
 
   const selectionCount = view === "email" ? selectedSenderIds.size : selectedDomains.size;
 
+  // Collect unique tags that exist on the selected emails (for Remove Tags dialog)
+  const existingTagsOnSelection = useMemo(() => {
+    const resolvedIds = new Set(resolvedSenderIds);
+    const tagMap = new Map<number, Tag>();
+    for (const email of emails) {
+      if (resolvedIds.has(email.senderId)) {
+        for (const tag of email.tags as Tag[]) {
+          if (!tagMap.has(tag.id)) tagMap.set(tag.id, tag);
+        }
+      }
+    }
+    return [...tagMap.values()];
+  }, [emails, resolvedSenderIds]);
+
   function clearSelection() {
     setSelectedSenderIds(new Set());
     setSelectedDomains(new Set());
@@ -418,6 +432,7 @@ export function EmailAnalyzer() {
         selectedCount={selectionCount}
         selectedSenderIds={resolvedSenderIds}
         tags={tags}
+        existingTags={existingTagsOnSelection}
         onClearSelection={clearSelection}
         onTagsUpdated={handleTagsUpdated}
       />
