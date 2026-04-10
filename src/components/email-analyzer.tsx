@@ -13,6 +13,15 @@ import { Loader2, RefreshCw, Search, Mail, Globe, ChevronsUpDown, Check } from "
 import { EmailAnalyzerTable } from "@/components/email-analyzer-table";
 import { DomainAnalyzerTable } from "@/components/domain-analyzer-table";
 import { BulkActionBar } from "@/components/bulk-action-bar";
+import { EmailAnalyzerFilterBar } from "@/components/email-analyzer-filter-bar";
+import { EmailAnalyzerViews } from "@/components/email-analyzer-views";
+import {
+  DOMAIN_COLUMNS,
+  EMAIL_COLUMNS,
+  EMPTY_FILTERS,
+  serializeFilters,
+  type FilterState,
+} from "@/lib/email-analyzer-filters";
 import type {
   EmailPerformance,
   DomainPerformance,
@@ -42,6 +51,12 @@ export function EmailAnalyzer() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Advanced filters + saved views (per sub-view)
+  const [emailFilters, setEmailFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [domainFilters, setDomainFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [activeEmailViewId, setActiveEmailViewId] = useState<string | null>(null);
+  const [activeDomainViewId, setActiveDomainViewId] = useState<string | null>(null);
 
   // Sorting
   const [emailSort, setEmailSort] = useState<{ by: EmailSortField | null; dir: SortDir }>({ by: null, dir: "asc" });
@@ -89,7 +104,8 @@ export function EmailAnalyzer() {
   }, [search]);
 
   // Reset page when filters change
-  useEffect(() => { setEmailPage(1); setDomainPage(1); }, [workspaceId, debouncedSearch]);
+  useEffect(() => { setEmailPage(1); }, [workspaceId, debouncedSearch, emailFilters]);
+  useEffect(() => { setDomainPage(1); }, [workspaceId, debouncedSearch, domainFilters]);
 
   // Fetch workspaces + tags on mount
   useEffect(() => {
@@ -117,6 +133,9 @@ export function EmailAnalyzer() {
         params.set("sort_by", emailSort.by);
         params.set("sort_dir", emailSort.dir);
       }
+      for (const [k, v] of serializeFilters(emailFilters, EMAIL_COLUMNS)) {
+        params.append(k, v);
+      }
 
       const res = await fetch(`/api/email-analyzer/emails?${params}`);
       const json = await res.json();
@@ -127,7 +146,7 @@ export function EmailAnalyzer() {
     } finally {
       setLoading(false);
     }
-  }, [emailPage, workspaceId, debouncedSearch, emailSort]);
+  }, [emailPage, workspaceId, debouncedSearch, emailSort, emailFilters]);
 
   // Fetch domains
   const fetchDomains = useCallback(async () => {
@@ -142,6 +161,9 @@ export function EmailAnalyzer() {
         params.set("sort_by", domainSort.by);
         params.set("sort_dir", domainSort.dir);
       }
+      for (const [k, v] of serializeFilters(domainFilters, DOMAIN_COLUMNS)) {
+        params.append(k, v);
+      }
 
       const res = await fetch(`/api/email-analyzer/domains?${params}`);
       const json = await res.json();
@@ -152,7 +174,7 @@ export function EmailAnalyzer() {
     } finally {
       setLoading(false);
     }
-  }, [domainPage, workspaceId, debouncedSearch, domainSort]);
+  }, [domainPage, workspaceId, debouncedSearch, domainSort, domainFilters]);
 
   // Build domain → senderIds map when emails load
   const fetchDomainEmailMapping = useCallback(async () => {
@@ -319,8 +341,28 @@ export function EmailAnalyzer() {
       </div>
 
       {/* Filters + View Toggle */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Saved views */}
+          <EmailAnalyzerViews
+            scope={view}
+            activeViewId={view === "email" ? activeEmailViewId : activeDomainViewId}
+            currentFilters={view === "email" ? emailFilters : domainFilters}
+            onActivate={(id, filters) => {
+              if (view === "email") {
+                setActiveEmailViewId(id);
+                setEmailFilters(filters);
+              } else {
+                setActiveDomainViewId(id);
+                setDomainFilters(filters);
+              }
+            }}
+            onApplyFilters={(next) => {
+              if (view === "email") setEmailFilters(next);
+              else setDomainFilters(next);
+            }}
+          />
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
@@ -373,6 +415,17 @@ export function EmailAnalyzer() {
               </div>
             </PopoverContent>
           </Popover>
+
+          {/* Advanced filter builder */}
+          <EmailAnalyzerFilterBar
+            columns={view === "email" ? EMAIL_COLUMNS : DOMAIN_COLUMNS}
+            tags={tags}
+            state={view === "email" ? emailFilters : domainFilters}
+            onChange={(next) => {
+              if (view === "email") setEmailFilters(next);
+              else setDomainFilters(next);
+            }}
+          />
         </div>
 
         {/* View toggle */}

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseBg } from "@/lib/supabase-bg";
+import {
+  DOMAIN_COLUMNS,
+  applyFilters,
+  parseFiltersFromParams,
+} from "@/lib/email-analyzer-filters";
+import { applyFiltersToQuery } from "@/lib/email-analyzer-server-filters";
 
 interface DomainAgg {
   domain: string;
@@ -19,6 +25,24 @@ export async function GET(request: NextRequest) {
   const workspaceId = searchParams.get("workspace_id") || "";
   const search = searchParams.get("search") || "";
 
+  const parsedFilters = parseFiltersFromParams(searchParams, DOMAIN_COLUMNS);
+
+  const hasPreRows = parsedFilters.rows.some((r) => {
+    const col = DOMAIN_COLUMNS.find((c) => c.id === r.columnId);
+    return col?.scope === "domain-pre";
+  });
+  const hasPostRows = parsedFilters.rows.some((r) => {
+    const col = DOMAIN_COLUMNS.find((c) => c.id === r.columnId);
+    return col?.scope === "domain-post";
+  });
+  // In OR mode, if filters span both pre- and post-aggregation columns, we
+  // cannot push the pre-filters to SQL — that would intersect with the
+  // post-filter evaluation instead of unioning. Fall back to evaluating
+  // everything in JS (pre-filters applied to aggregated rows via
+  // domain/pre fields mirrored onto the aggregate).
+  const pushDownPre =
+    parsedFilters.conjunction === "and" || !(hasPreRows && hasPostRows);
+
   // Fetch all matching rows and aggregate in JS (fine for <5k rows)
   let query = supabaseBg
     .from("email_performance")
@@ -26,6 +50,11 @@ export async function GET(request: NextRequest) {
 
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   if (search) query = query.ilike("domain", `%${search}%`);
+
+  // Push "domain-pre" filters (currently just `domain`) into Supabase when safe.
+  if (pushDownPre) {
+    query = applyFiltersToQuery(query, parsedFilters, DOMAIN_COLUMNS);
+  }
 
   const { data, error } = await query;
 
@@ -57,6 +86,26 @@ export async function GET(request: NextRequest) {
       avgBounceRate: Math.round((agg.bounce / agg.count) * 100) / 100,
     });
   }
+
+  // Apply filters in JS to the aggregated array. When pre-filters were NOT
+  // pushed down (OR-mode with mixed scopes), we evaluate the full filter set
+  // here so the conjunction semantics match what the user requested. The
+  // aggregated row exposes `domain` directly, so domain-pre rules still work
+  // against it. Otherwise, only post-aggregation rows need re-evaluation.
+  const filtersToApplyInJs = pushDownPre
+    ? {
+        conjunction: parsedFilters.conjunction,
+        rows: parsedFilters.rows.filter((r) => {
+          const col = DOMAIN_COLUMNS.find((c) => c.id === r.columnId);
+          return col?.scope === "domain-post";
+        }),
+      }
+    : parsedFilters;
+  domains = applyFilters(
+    domains as unknown as Array<Record<string, unknown>>,
+    filtersToApplyInJs,
+    DOMAIN_COLUMNS,
+  ) as unknown as DomainAgg[];
 
   // Sort
   const validSortFields = ["domain", "totalEmails", "avgWarmupScore", "avgReplyRate", "avgBounceRate"];

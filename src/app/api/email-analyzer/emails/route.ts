@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseBg } from "@/lib/supabase-bg";
+import {
+  EMAIL_COLUMNS,
+  parseFiltersFromParams,
+} from "@/lib/email-analyzer-filters";
+import { applyFiltersToQuery } from "@/lib/email-analyzer-server-filters";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -11,6 +16,9 @@ export async function GET(request: NextRequest) {
   const workspaceId = searchParams.get("workspace_id") || "";
   const search = searchParams.get("search") || "";
   const tagIds = searchParams.getAll("tag_ids[]");
+
+  // Advanced filters (conditional AND/OR across any column)
+  const parsedFilters = parseFiltersFromParams(searchParams, EMAIL_COLUMNS);
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -28,6 +36,7 @@ export async function GET(request: NextRequest) {
       countQuery = countQuery.contains("tags", [{ id: Number(tagId) }]);
     }
   }
+  countQuery = applyFiltersToQuery(countQuery, parsedFilters, EMAIL_COLUMNS);
 
   const { count } = await countQuery;
   const total = count ?? 0;
@@ -44,6 +53,7 @@ export async function GET(request: NextRequest) {
       query = query.contains("tags", [{ id: Number(tagId) }]);
     }
   }
+  query = applyFiltersToQuery(query, parsedFilters, EMAIL_COLUMNS);
 
   // Sorting
   const validSortFields = ["email", "domain", "warmup_score", "reply_rate", "bounce_rate", "total_sent", "total_replies"];
