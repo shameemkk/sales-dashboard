@@ -31,7 +31,7 @@ import type {
 
 type View = "email" | "domain";
 type EmailSortField = "email" | "domain" | "warmup_score" | "reply_rate" | "bounce_rate" | "total_sent";
-type DomainSortField = "domain" | "totalEmails" | "avgWarmupScore" | "avgReplyRate" | "avgBounceRate";
+type DomainSortField = "domain" | "totalEmails" | "totalSent" | "avgWarmupScore" | "avgReplyRate" | "avgBounceRate";
 type SortDir = "asc" | "desc";
 
 const META_DEFAULT = { current_page: 1, last_page: 1, per_page: 25, total: 0 };

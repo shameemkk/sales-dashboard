@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -8,9 +9,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ChevronLeft,
   ChevronRight,
@@ -20,7 +29,7 @@ import {
 } from "lucide-react";
 import type { DomainPerformance } from "@/lib/data";
 
-type SortField = "domain" | "totalEmails" | "avgWarmupScore" | "avgReplyRate" | "avgBounceRate";
+type SortField = "domain" | "totalEmails" | "totalSent" | "avgWarmupScore" | "avgReplyRate" | "avgBounceRate";
 type SortDir = "asc" | "desc";
 
 interface Props {
@@ -122,6 +131,8 @@ export function DomainAnalyzerTable({
   page,
   onPageChange,
 }: Props) {
+  const [tagsSheetDomain, setTagsSheetDomain] = useState<DomainPerformance | null>(null);
+
   const allPageDomains = domains.map((d) => d.domain);
   const allSelected = allPageDomains.length > 0 && allPageDomains.every((d) => selectedDomains.has(d));
   const someSelected = allPageDomains.some((d) => selectedDomains.has(d)) && !allSelected;
@@ -146,9 +157,11 @@ export function DomainAnalyzerTable({
   const columns: { label: string; field: SortField | null }[] = [
     { label: "Domain", field: "domain" },
     { label: "Total Emails", field: "totalEmails" },
+    { label: "Emails Sent", field: "totalSent" },
     { label: "Avg Warmup Score", field: "avgWarmupScore" },
     { label: "Avg Reply Rate", field: "avgReplyRate" },
     { label: "Avg Bounce Rate", field: "avgBounceRate" },
+    { label: "Tags", field: null },
   ];
 
   return (
@@ -209,9 +222,29 @@ export function DomainAnalyzerTable({
                   </TableCell>
                   <TableCell className="font-medium text-sm">{d.domain}</TableCell>
                   <TableCell className="tabular-nums text-sm">{d.totalEmails}</TableCell>
+                  <TableCell className="tabular-nums text-sm">{d.totalSent.toLocaleString()}</TableCell>
                   <TableCell><WarmupBar score={d.avgWarmupScore} /></TableCell>
                   <TableCell><RateBar rate={d.avgReplyRate} thresholds={{ green: 14, blue: 10, amber: 6 }} /></TableCell>
                   <TableCell><RateBar rate={d.avgBounceRate} thresholds={{ green: 0, blue: 0, amber: 3 }} /></TableCell>
+                  <TableCell>
+                    {d.tags.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setTagsSheetDomain(d)}
+                        className="flex flex-wrap gap-1 rounded-md -mx-1 px-1 py-0.5 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none cursor-pointer"
+                        aria-label={`View all tags for ${d.domain}`}
+                      >
+                        {d.tags.slice(0, 3).map((t) => (
+                          <Badge key={t.name} variant="secondary" className="text-xs">{t.name}</Badge>
+                        ))}
+                        {d.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">+{d.tags.length - 3}</Badge>
+                        )}
+                      </button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -262,6 +295,34 @@ export function DomainAnalyzerTable({
           </div>
         </div>
       )}
+
+      <Dialog
+        open={tagsSheetDomain !== null}
+        onOpenChange={(open) => {
+          if (!open) setTagsSheetDomain(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">{tagsSheetDomain?.domain}</DialogTitle>
+            <DialogDescription>
+              {tagsSheetDomain?.tags.length ?? 0} tag
+              {(tagsSheetDomain?.tags.length ?? 0) !== 1 ? "s" : ""} across{" "}
+              {tagsSheetDomain?.totalEmails ?? 0} sender
+              {(tagsSheetDomain?.totalEmails ?? 0) !== 1 ? "s" : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5">
+              {tagsSheetDomain?.tags.map((t) => (
+                <Badge key={t.name} variant="secondary" className="text-xs">
+                  {t.name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

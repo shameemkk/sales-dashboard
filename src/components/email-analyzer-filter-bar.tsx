@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,16 @@ interface Props {
 export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props) {
   const [open, setOpen] = useState(false);
 
+  // Enforce a minimum of one filter row. Handles external loads (e.g. a saved
+  // view applied via onApplyFilters) or an initial empty state — local mutations
+  // in removeRow/clearAll already replace-in-place instead of going to zero.
+  useEffect(() => {
+    if (state.rows.length === 0) {
+      onChange({ ...state, rows: [newFilterRow(columns)] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.rows.length, columns]);
+
   const completeCount = useMemo(
     () => state.rows.filter((r) => isFilterRowComplete(r, columns)).length,
     [state.rows, columns],
@@ -59,9 +69,11 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
   }
 
   function removeRow(rowId: string) {
+    const next = state.rows.filter((r) => r.id !== rowId);
     onChange({
       ...state,
-      rows: state.rows.filter((r) => r.id !== rowId),
+      // Never drop below one row — replace with a fresh empty row instead.
+      rows: next.length === 0 ? [newFilterRow(columns)] : next,
     });
   }
 
@@ -73,7 +85,7 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
   }
 
   function clearAll() {
-    onChange({ conjunction: state.conjunction, rows: [] });
+    onChange({ conjunction: state.conjunction, rows: [newFilterRow(columns)] });
   }
 
   function setConjunction(c: "and" | "or") {
@@ -96,18 +108,12 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
         </PopoverTrigger>
         <PopoverContent align="start" className="w-170 p-0">
           <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-            {state.rows.length === 0
+            {completeCount === 0
               ? "No filters applied"
-              : `Showing rows where${state.rows.length > 1 ? ` ${state.conjunction.toUpperCase()} of` : ""} the following`}
+              : `Showing rows where${completeCount > 1 ? ` ${state.conjunction.toUpperCase()} of` : ""} the following`}
           </div>
 
           <div className="max-h-90 overflow-y-auto p-3 space-y-2">
-            {state.rows.length === 0 && (
-              <div className="text-xs text-muted-foreground text-center py-4">
-                Add a filter to narrow results.
-              </div>
-            )}
-
             {state.rows.map((row, i) => (
               <div key={row.id} className="flex items-center gap-1.5">
                 {/* Conjunction label */}
@@ -157,7 +163,7 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
               <Plus className="size-3.5 mr-1" />
               Add filter
             </Button>
-            {state.rows.length > 0 && (
+            {(completeCount > 0 || state.rows.length > 1) && (
               <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearAll}>
                 Clear all
               </Button>

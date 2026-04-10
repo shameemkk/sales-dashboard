@@ -130,8 +130,10 @@ export interface EmailPerformance {
 export interface DomainPerformance {
   domain: string;
   totalEmails: number;
+  totalSent: number;
   avgWarmupScore: number;
   avgReplyRate: number;
   avgBounceRate: number;
+  tags: Tag[];
 }
 

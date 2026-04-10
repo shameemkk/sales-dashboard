@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -12,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ChevronLeft,
   ChevronRight,
@@ -125,6 +133,8 @@ export function EmailAnalyzerTable({
   page,
   onPageChange,
 }: Props) {
+  const [tagsDialogEmail, setTagsDialogEmail] = useState<EmailPerformance | null>(null);
+
   const allPageIds = emails.map((e) => e.senderId);
   const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.has(id));
   const someSelected = allPageIds.some((id) => selectedIds.has(id)) && !allSelected;
@@ -219,14 +229,23 @@ export function EmailAnalyzerTable({
                   <TableCell><RateBar rate={email.bounceRate} thresholds={{ green: 0, blue: 0, amber: 3 }} /></TableCell>
                   <TableCell className="tabular-nums text-sm">{email.totalSent.toLocaleString()}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(email.tags as Tag[]).slice(0, 3).map((t) => (
-                        <Badge key={t.id} variant="secondary" className="text-xs">{t.name}</Badge>
-                      ))}
-                      {email.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">+{email.tags.length - 3}</Badge>
-                      )}
-                    </div>
+                    {email.tags.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setTagsDialogEmail(email)}
+                        className="flex flex-wrap gap-1 rounded-md -mx-1 px-1 py-0.5 hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none cursor-pointer"
+                        aria-label={`View all tags for ${email.email}`}
+                      >
+                        {(email.tags as Tag[]).slice(0, 3).map((t) => (
+                          <Badge key={t.id} variant="secondary" className="text-xs">{t.name}</Badge>
+                        ))}
+                        {email.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">+{email.tags.length - 3}</Badge>
+                        )}
+                      </button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))
@@ -278,6 +297,32 @@ export function EmailAnalyzerTable({
           </div>
         </div>
       )}
+
+      <Dialog
+        open={tagsDialogEmail !== null}
+        onOpenChange={(open) => {
+          if (!open) setTagsDialogEmail(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">{tagsDialogEmail?.email}</DialogTitle>
+            <DialogDescription>
+              {tagsDialogEmail?.tags.length ?? 0} tag
+              {(tagsDialogEmail?.tags.length ?? 0) !== 1 ? "s" : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <div className="flex flex-wrap gap-1.5">
+              {tagsDialogEmail?.tags.map((t) => (
+                <Badge key={t.id} variant="secondary" className="text-xs">
+                  {t.name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

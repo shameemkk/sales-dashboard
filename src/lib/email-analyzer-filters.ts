@@ -64,9 +64,14 @@ export const EMAIL_COLUMNS: FilterColumn[] = [
 export const DOMAIN_COLUMNS: FilterColumn[] = [
   { id: "domain", label: "Domain", field: "domain", dataType: "string", scope: "domain-pre" },
   { id: "totalEmails", label: "Total Emails", field: "totalEmails", dataType: "number", scope: "domain-post" },
+  { id: "totalSent", label: "Emails Sent", field: "totalSent", dataType: "number", scope: "domain-post" },
   { id: "avgWarmupScore", label: "Avg Warmup Score", field: "avgWarmupScore", dataType: "number", scope: "domain-post" },
   { id: "avgReplyRate", label: "Avg Reply Rate", field: "avgReplyRate", dataType: "number", scope: "domain-post" },
   { id: "avgBounceRate", label: "Avg Bounce Rate", field: "avgBounceRate", dataType: "number", scope: "domain-post" },
+  // Matches against the union of tags across all senders in the domain.
+  // Evaluated post-aggregation in JS by applyFilters() — the domain route
+  // already attaches a `tags: Tag[]` union on each aggregated row.
+  { id: "tags", label: "Tags", field: "tags", dataType: "tags", scope: "domain-post" },
 ];
 
 // ---------- Operators ----------

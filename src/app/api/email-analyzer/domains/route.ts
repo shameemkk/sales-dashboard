@@ -7,12 +7,19 @@ import {
 } from "@/lib/email-analyzer-filters";
 import { applyFiltersToQuery } from "@/lib/email-analyzer-server-filters";
 
+interface TagLike {
+  id: number;
+  name: string;
+}
+
 interface DomainAgg {
   domain: string;
   totalEmails: number;
+  totalSent: number;
   avgWarmupScore: number;
   avgReplyRate: number;
   avgBounceRate: number;
+  tags: TagLike[];
 }
 
 export async function GET(request: NextRequest) {
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
   // Fetch all matching rows and aggregate in JS (fine for <5k rows)
   let query = supabaseBg
     .from("email_performance")
-    .select("domain, warmup_score, reply_rate, bounce_rate");
+    .select("domain, warmup_score, reply_rate, bounce_rate, total_sent, tags");
 
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   if (search) query = query.ilike("domain", `%${search}%`);
@@ -63,15 +70,38 @@ export async function GET(request: NextRequest) {
   }
 
   // Group by domain
-  const domainMap = new Map<string, { count: number; warmup: number; reply: number; bounce: number }>();
+  interface DomainBucket {
+    count: number;
+    sent: number;
+    warmup: number;
+    reply: number;
+    bounce: number;
+    // Dedupe by tag name — tags stored from EmailBison may or may not carry
+    // stable ids across senders, but name is the user-facing identity.
+    tags: Map<string, TagLike>;
+  }
+  const domainMap = new Map<string, DomainBucket>();
 
   for (const row of data ?? []) {
     const d = row.domain || "(unknown)";
-    const existing = domainMap.get(d) ?? { count: 0, warmup: 0, reply: 0, bounce: 0 };
+    const existing =
+      domainMap.get(d) ??
+      ({ count: 0, sent: 0, warmup: 0, reply: 0, bounce: 0, tags: new Map<string, TagLike>() } as DomainBucket);
     existing.count++;
+    existing.sent += Number(row.total_sent) || 0;
     existing.warmup += Number(row.warmup_score) || 0;
     existing.reply += Number(row.reply_rate) || 0;
     existing.bounce += Number(row.bounce_rate) || 0;
+    // Union tags across senders in this domain
+    const rowTags = Array.isArray(row.tags) ? (row.tags as Array<Partial<TagLike>>) : [];
+    for (const t of rowTags) {
+      if (!t || typeof t !== "object") continue;
+      const name = typeof t.name === "string" ? t.name : null;
+      if (!name) continue;
+      if (!existing.tags.has(name)) {
+        existing.tags.set(name, { id: typeof t.id === "number" ? t.id : 0, name });
+      }
+    }
     domainMap.set(d, existing);
   }
 
@@ -81,9 +111,11 @@ export async function GET(request: NextRequest) {
     domains.push({
       domain,
       totalEmails: agg.count,
+      totalSent: agg.sent,
       avgWarmupScore: Math.round((agg.warmup / agg.count) * 100) / 100,
       avgReplyRate: Math.round((agg.reply / agg.count) * 100) / 100,
       avgBounceRate: Math.round((agg.bounce / agg.count) * 100) / 100,
+      tags: [...agg.tags.values()].sort((a, b) => a.name.localeCompare(b.name)),
     });
   }
 
@@ -108,7 +140,7 @@ export async function GET(request: NextRequest) {
   ) as unknown as DomainAgg[];
 
   // Sort
-  const validSortFields = ["domain", "totalEmails", "avgWarmupScore", "avgReplyRate", "avgBounceRate"];
+  const validSortFields = ["domain", "totalEmails", "totalSent", "avgWarmupScore", "avgReplyRate", "avgBounceRate"];
   const field = validSortFields.includes(sortBy) ? sortBy : "domain";
   const dir = sortDir === "desc" ? -1 : 1;
 
