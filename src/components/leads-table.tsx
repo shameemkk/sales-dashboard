@@ -69,6 +69,10 @@ import {
 import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import type { Lead } from "@/lib/data";
+import { EMPTY_FILTERS, type FilterState } from "@/lib/email-analyzer-filters";
+import { LEADS_COLUMNS, applyLeadsFilters, serializeTagFilters, parsedFromState } from "@/lib/leads-filters";
+import { EmailAnalyzerFilterBar } from "@/components/email-analyzer-filter-bar";
+import { EmailAnalyzerViews } from "@/components/email-analyzer-views";
 
 /* ─── Types ─── */
 interface Stats {
@@ -417,7 +421,10 @@ export function LeadsTable() {
   const [sortField, setSortField] = useState<SortField>("dateAdded");
   const [sortDir, setSortDir] = useState<SortDirection>("desc");
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [tagFilter, setTagFilter] = useState<string>("all");
+  const [filterState, setFilterState] = useState<FilterState>(EMPTY_FILTERS);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [fetchKey, setFetchKey] = useState(0);
+  const [allTagNames, setAllTagNames] = useState<string[]>([]);
   const [contactSyncing, setContactSyncing] = useState(false);
   const [contactSyncResult, setContactSyncResult] = useState<{ ok: boolean; message: string } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -458,6 +465,8 @@ export function LeadsTable() {
       to.setHours(23, 59, 59, 999);
       params.set("dateTo", to.toISOString());
     }
+    // Tag filter rows go to the server for accurate stats computation
+    for (const [k, v] of serializeTagFilters(filterState)) params.append(k, v);
 
     fetch(`/api/leads?${params}`)
       .then((r) => {
@@ -481,7 +490,7 @@ export function LeadsTable() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, search, dateRange]);
+  }, [page, pageSize, search, dateRange, filterState, fetchKey]);
 
   // Scroll to top of table on page change
   useEffect(() => {
@@ -525,6 +534,14 @@ export function LeadsTable() {
     return () => { if (contactSyncPollRef.current) clearInterval(contactSyncPollRef.current); };
   }, []);
 
+  // Fetch all distinct lead tag names once on mount for the filter bar picker.
+  useEffect(() => {
+    fetch("/api/leads/tags")
+      .then((r) => r.ok ? r.json() : [])
+      .then((tags: string[]) => setAllTagNames(tags))
+      .catch(() => {});
+  }, []);
+
   const handleContactSync = useCallback(async () => {
     setContactSyncing(true);
     setContactSyncResult(null);
@@ -539,21 +556,21 @@ export function LeadsTable() {
     }
   }, [startContactSyncPoll]);
 
-  // Collect unique tags for filter
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    leads.forEach((l) => l.tags.forEach((t) => set.add(t)));
-    return Array.from(set).sort();
-  }, [leads]);
+  // All distinct tag names shaped as Tag[] for the filter bar picker.
+  // Uses the full dataset from /api/leads/tags; falls back to current page while loading.
+  const tagObjects = useMemo(() => {
+    const names = allTagNames.length > 0
+      ? allTagNames
+      : Array.from(new Set(leads.flatMap((l) => l.tags))).sort();
+    return names.map((name, idx) => ({ id: idx, name }));
+  }, [allTagNames, leads]);
 
-  // Apply client-side sort + tag filter
-  const displayedLeads = useMemo(() => {
-    let result = leads;
-    if (tagFilter !== "all") {
-      result = result.filter((l) => l.tags.includes(tagFilter));
-    }
-    return sortLeads(result, sortField, sortDir);
-  }, [leads, sortField, sortDir, tagFilter]);
+  // Apply client-side filters + sort
+  const parsedFilters = useMemo(() => parsedFromState(filterState), [filterState]);
+  const displayedLeads = useMemo(
+    () => sortLeads(applyLeadsFilters(leads, parsedFilters), sortField, sortDir),
+    [leads, parsedFilters, sortField, sortDir],
+  );
 
   const total = meta?.total ?? 0;
   const lastPage = meta?.last_page ?? 1;
@@ -651,21 +668,21 @@ export function LeadsTable() {
                 </PopoverContent>
               </Popover>
 
-              {/* Tag filter */}
-              {allTags.length > 0 && (
-                <Select value={tagFilter} onValueChange={(v) => { setTagFilter(v); }}>
-                  <SelectTrigger className="w-35 h-9 text-xs">
-                    <Tag className="size-3 mr-1.5 text-muted-foreground" />
-                    <SelectValue placeholder="All tags" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All tags</SelectItem>
-                    {allTags.map((tag) => (
-                      <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              {/* Saved views */}
+              <EmailAnalyzerViews
+                scope="leads"
+                activeViewId={activeViewId}
+                currentFilters={filterState}
+                onActivate={(id, f) => { setActiveViewId(id); setFilterState(f); setPage(1); }}
+                onApplyFilters={(f) => { setFilterState(f); setPage(1); }}
+              />
+              {/* Advanced filter builder */}
+              <EmailAnalyzerFilterBar
+                columns={LEADS_COLUMNS}
+                tags={tagObjects}
+                state={filterState}
+                onChange={(next) => { setFilterState(next); setPage(1); }}
+              />
 
               {/* Search */}
               <div className="relative w-full sm:w-64">
@@ -801,7 +818,7 @@ export function LeadsTable() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => { setError(null); setLoading(true); setPage(page); }}
+                          onClick={() => { setError(null); setFetchKey((k) => k + 1); }}
                         >
                           Try again
                         </Button>

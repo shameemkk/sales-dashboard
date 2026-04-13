@@ -45,76 +45,93 @@ interface Props {
 
 export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props) {
   const [open, setOpen] = useState(false);
+  // Local draft — edits stay here until Apply is clicked.
+  const [draft, setDraft] = useState<FilterState>(
+    state.rows.length > 0 ? state : { ...state, rows: [newFilterRow(columns)] }
+  );
 
-  // Enforce a minimum of one filter row. Handles external loads (e.g. a saved
-  // view applied via onApplyFilters) or an initial empty state — local mutations
-  // in removeRow/clearAll already replace-in-place instead of going to zero.
+  // Sync draft from parent whenever the popover is closed (e.g. saved view loaded externally).
   useEffect(() => {
-    if (state.rows.length === 0) {
-      onChange({ ...state, rows: [newFilterRow(columns)] });
+    if (!open) {
+      setDraft(state.rows.length > 0 ? state : { ...state, rows: [newFilterRow(columns)] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.rows.length, columns]);
+  }, [open, state]);
 
-  const completeCount = useMemo(
+  // Badge on trigger shows currently *applied* filter count (from state prop).
+  const appliedCount = useMemo(
     () => state.rows.filter((r) => isFilterRowComplete(r, columns)).length,
     [state.rows, columns],
   );
 
+  // Header inside the panel shows the draft count so the user sees live feedback.
+  const draftCompleteCount = useMemo(
+    () => draft.rows.filter((r) => isFilterRowComplete(r, columns)).length,
+    [draft.rows, columns],
+  );
+
   function updateRow(rowId: string, patch: Partial<FilterRow>) {
-    onChange({
-      ...state,
-      rows: state.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
-    });
+    setDraft((d) => ({
+      ...d,
+      rows: d.rows.map((r) => (r.id === rowId ? { ...r, ...patch } : r)),
+    }));
   }
 
   function removeRow(rowId: string) {
-    const next = state.rows.filter((r) => r.id !== rowId);
-    onChange({
-      ...state,
-      // Never drop below one row — replace with a fresh empty row instead.
-      rows: next.length === 0 ? [newFilterRow(columns)] : next,
+    setDraft((d) => {
+      const next = d.rows.filter((r) => r.id !== rowId);
+      return { ...d, rows: next.length === 0 ? [newFilterRow(columns)] : next };
     });
   }
 
   function addRow() {
-    onChange({
-      ...state,
-      rows: [...state.rows, newFilterRow(columns)],
-    });
+    setDraft((d) => ({ ...d, rows: [...d.rows, newFilterRow(columns)] }));
   }
 
   function clearAll() {
-    onChange({ conjunction: state.conjunction, rows: [newFilterRow(columns)] });
+    const cleared = { conjunction: draft.conjunction, rows: [newFilterRow(columns)] };
+    setDraft(cleared);
+    onChange(cleared);
+    setOpen(false);
   }
 
   function setConjunction(c: "and" | "or") {
-    onChange({ ...state, conjunction: c });
+    setDraft((d) => ({ ...d, conjunction: c }));
+  }
+
+  function apply() {
+    onChange(draft);
+    setOpen(false);
+  }
+
+  // Discard uncommitted changes when the popover closes without Apply.
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
   }
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-9 gap-1.5">
             <Filter className="size-3.5" />
             Filter
-            {completeCount > 0 && (
+            {appliedCount > 0 && (
               <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-[10px] ml-0.5">
-                {completeCount}
+                {appliedCount}
               </Badge>
             )}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-170 p-0">
           <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-            {completeCount === 0
-              ? "No filters applied"
-              : `Showing rows where${completeCount > 1 ? ` ${state.conjunction.toUpperCase()} of` : ""} the following`}
+            {draftCompleteCount === 0
+              ? "No filters"
+              : `Filter where${draftCompleteCount > 1 ? ` ${draft.conjunction.toUpperCase()} of` : ""} the following`}
           </div>
 
           <div className="max-h-90 overflow-y-auto p-3 space-y-2">
-            {state.rows.map((row, i) => (
+            {draft.rows.map((row, i) => (
               <div key={row.id} className="flex items-center gap-1.5">
                 {/* Conjunction label */}
                 <div className="w-16 shrink-0">
@@ -122,7 +139,7 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
                     <span className="text-xs text-muted-foreground pl-2">Where</span>
                   ) : i === 1 ? (
                     <Select
-                      value={state.conjunction}
+                      value={draft.conjunction}
                       onValueChange={(v) => setConjunction(v as "and" | "or")}
                     >
                       <SelectTrigger className="h-8 w-16 text-xs px-2">
@@ -134,7 +151,7 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
                       </SelectContent>
                     </Select>
                   ) : (
-                    <span className="text-xs text-muted-foreground pl-2">{state.conjunction}</span>
+                    <span className="text-xs text-muted-foreground pl-2">{draft.conjunction}</span>
                   )}
                 </div>
 
@@ -159,15 +176,20 @@ export function EmailAnalyzerFilterBar({ columns, tags, state, onChange }: Props
           </div>
 
           <div className="border-t px-3 py-2 flex items-center justify-between">
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={addRow}>
-              <Plus className="size-3.5 mr-1" />
-              Add filter
-            </Button>
-            {(completeCount > 0 || state.rows.length > 1) && (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearAll}>
-                Clear all
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={addRow}>
+                <Plus className="size-3.5 mr-1" />
+                Add filter
               </Button>
-            )}
+              {(draftCompleteCount > 0 || draft.rows.length > 1) && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearAll}>
+                  Clear all
+                </Button>
+              )}
+            </div>
+            <Button size="sm" className="h-8 text-xs px-3" onClick={apply}>
+              Apply
+            </Button>
           </div>
         </PopoverContent>
       </Popover>

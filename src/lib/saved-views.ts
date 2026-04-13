@@ -3,7 +3,7 @@
 
 import type { FilterState } from "@/lib/email-analyzer-filters";
 
-export type SavedViewScope = "email" | "domain";
+export type SavedViewScope = "email" | "domain" | "leads";
 
 export interface SavedView {
   id: string;
