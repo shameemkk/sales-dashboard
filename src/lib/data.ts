@@ -81,6 +81,7 @@ export interface EmailPerformance {
   senderId: string;
   email: string;
   domain: string;
+  imapServer: string | null;
   totalSent: number;
   totalReplies: number;
   replyRate: number;
@@ -94,6 +95,7 @@ export interface EmailPerformance {
 
 export interface DomainPerformance {
   domain: string;
+  imapServers: string[];
   totalEmails: number;
   totalSent: number;
   avgWarmupScore: number;

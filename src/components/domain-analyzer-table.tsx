@@ -156,6 +156,7 @@ export function DomainAnalyzerTable({
 
   const columns: { label: string; field: SortField | null }[] = [
     { label: "Domain", field: "domain" },
+    { label: "IMAP Server(s)", field: null },
     { label: "Total Emails", field: "totalEmails" },
     { label: "Emails Sent", field: "totalSent" },
     { label: "Avg Warmup Score", field: "avgWarmupScore" },
@@ -221,6 +222,7 @@ export function DomainAnalyzerTable({
                     />
                   </TableCell>
                   <TableCell className="font-medium text-sm">{d.domain}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{d.imapServers.length > 0 ? d.imapServers.join(", ") : "—"}</TableCell>
                   <TableCell className="tabular-nums text-sm">{d.totalEmails}</TableCell>
                   <TableCell className="tabular-nums text-sm">{d.totalSent.toLocaleString()}</TableCell>
                   <TableCell><WarmupBar score={d.avgWarmupScore} /></TableCell>

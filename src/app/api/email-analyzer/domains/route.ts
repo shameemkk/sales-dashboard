@@ -14,6 +14,7 @@ interface TagLike {
 
 interface DomainAgg {
   domain: string;
+  imapServers: string[];
   totalEmails: number;
   totalSent: number;
   avgWarmupScore: number;
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
   // Fetch all matching rows and aggregate in JS (fine for <5k rows)
   let query = supabaseBg
     .from("email_performance")
-    .select("domain, warmup_score, reply_rate, bounce_rate, total_sent, tags");
+    .select("domain, imap_server, warmup_score, reply_rate, bounce_rate, total_sent, tags");
 
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   if (search) query = query.ilike("domain", `%${search}%`);
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
     warmup: number;
     reply: number;
     bounce: number;
+    imapServers: Set<string>;
     // Dedupe by tag name — tags stored from EmailBison may or may not carry
     // stable ids across senders, but name is the user-facing identity.
     tags: Map<string, TagLike>;
@@ -86,12 +88,13 @@ export async function GET(request: NextRequest) {
     const d = row.domain || "(unknown)";
     const existing =
       domainMap.get(d) ??
-      ({ count: 0, sent: 0, warmup: 0, reply: 0, bounce: 0, tags: new Map<string, TagLike>() } as DomainBucket);
+      ({ count: 0, sent: 0, warmup: 0, reply: 0, bounce: 0, imapServers: new Set<string>(), tags: new Map<string, TagLike>() } as DomainBucket);
     existing.count++;
     existing.sent += Number(row.total_sent) || 0;
     existing.warmup += Number(row.warmup_score) || 0;
     existing.reply += Number(row.reply_rate) || 0;
     existing.bounce += Number(row.bounce_rate) || 0;
+    if (row.imap_server) existing.imapServers.add(row.imap_server);
     // Union tags across senders in this domain
     const rowTags = Array.isArray(row.tags) ? (row.tags as Array<Partial<TagLike>>) : [];
     for (const t of rowTags) {
@@ -110,6 +113,7 @@ export async function GET(request: NextRequest) {
   for (const [domain, agg] of domainMap) {
     domains.push({
       domain,
+      imapServers: [...agg.imapServers].sort(),
       totalEmails: agg.count,
       totalSent: agg.sent,
       avgWarmupScore: Math.round((agg.warmup / agg.count) * 100) / 100,

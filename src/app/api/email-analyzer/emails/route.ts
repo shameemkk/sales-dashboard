@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   query = applyFiltersToQuery(query, parsedFilters, EMAIL_COLUMNS);
 
   // Sorting
-  const validSortFields = ["email", "domain", "warmup_score", "reply_rate", "bounce_rate", "total_sent", "total_replies"];
+  const validSortFields = ["email", "domain", "imap_server", "warmup_score", "reply_rate", "bounce_rate", "total_sent", "total_replies"];
   const sortField = validSortFields.includes(sortBy) ? sortBy : "email";
   query = query.order(sortField, { ascending: sortDir });
 
@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
     senderId: row.sender_id,
     email: row.email,
     domain: row.domain,
+    imapServer: row.imap_server ?? null,
     totalSent: row.total_sent,
     totalReplies: row.total_replies,
     replyRate: Number(row.reply_rate),

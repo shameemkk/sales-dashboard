@@ -159,6 +159,7 @@ export function EmailAnalyzerTable({
   const columns: { label: string; field: SortField | null; className?: string }[] = [
     { label: "Email", field: "email" },
     { label: "Domain", field: "domain" },
+    { label: "IMAP Server", field: null },
     { label: "Warmup Score", field: "warmup_score" },
     { label: "Reply Rate", field: "reply_rate" },
     { label: "Bounce Rate", field: "bounce_rate" },
@@ -224,6 +225,7 @@ export function EmailAnalyzerTable({
                   </TableCell>
                   <TableCell className="font-medium text-sm">{email.email}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{email.domain}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{email.imapServer ?? "—"}</TableCell>
                   <TableCell><WarmupBar score={email.warmupScore} /></TableCell>
                   <TableCell><RateBar rate={email.replyRate} thresholds={{ green: 14, blue: 10, amber: 6 }} /></TableCell>
                   <TableCell><RateBar rate={email.bounceRate} thresholds={{ green: 0, blue: 0, amber: 3 }} /></TableCell>

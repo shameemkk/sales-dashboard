@@ -38,3 +38,6 @@ ALTER TABLE sync_schedules ADD CONSTRAINT sync_schedules_type_check
 ALTER TABLE sync_execution_log DROP CONSTRAINT IF EXISTS sync_execution_log_status_check;
 ALTER TABLE sync_execution_log ADD CONSTRAINT sync_execution_log_status_check
   CHECK (status IN ('queued', 'running', 'completed', 'failed'));
+
+-- Add imap_server column (nullable, idempotent)
+ALTER TABLE email_performance ADD COLUMN IF NOT EXISTS imap_server TEXT;

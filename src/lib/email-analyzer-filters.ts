@@ -54,6 +54,7 @@ export const EMPTY_FILTERS: FilterState = { conjunction: "and", rows: [] };
 export const EMAIL_COLUMNS: FilterColumn[] = [
   { id: "email", label: "Email", field: "email", dataType: "string", scope: "email" },
   { id: "domain", label: "Domain", field: "domain", dataType: "string", scope: "email" },
+  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "string", scope: "email" },
   { id: "warmup_score", label: "Warmup Score", field: "warmup_score", dataType: "number", scope: "email" },
   { id: "reply_rate", label: "Reply Rate", field: "reply_rate", dataType: "number", scope: "email" },
   { id: "bounce_rate", label: "Bounce Rate", field: "bounce_rate", dataType: "number", scope: "email" },
@@ -63,6 +64,7 @@ export const EMAIL_COLUMNS: FilterColumn[] = [
 
 export const DOMAIN_COLUMNS: FilterColumn[] = [
   { id: "domain", label: "Domain", field: "domain", dataType: "string", scope: "domain-pre" },
+  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "string", scope: "domain-pre" },
   { id: "totalEmails", label: "Total Emails", field: "totalEmails", dataType: "number", scope: "domain-post" },
   { id: "totalSent", label: "Emails Sent", field: "totalSent", dataType: "number", scope: "domain-post" },
   { id: "avgWarmupScore", label: "Avg Warmup Score", field: "avgWarmupScore", dataType: "number", scope: "domain-post" },
