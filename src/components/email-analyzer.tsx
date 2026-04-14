@@ -77,6 +77,7 @@ export function EmailAnalyzer() {
   // Reference data
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [imapServers, setImapServers] = useState<string[]>([]);
 
   // Workspace search popover
   const [wsOpen, setWsOpen] = useState(false);
@@ -117,6 +118,11 @@ export function EmailAnalyzer() {
     fetch("/api/tags")
       .then((r) => r.json())
       .then((d) => setTags(Array.isArray(d) ? d : d.data ?? []))
+      .catch(() => {});
+
+    fetch("/api/email-analyzer/imap-servers")
+      .then((r) => r.json())
+      .then((d) => setImapServers(Array.isArray(d.data) ? d.data : []))
       .catch(() => {});
   }, []);
 
@@ -420,6 +426,7 @@ export function EmailAnalyzer() {
           <EmailAnalyzerFilterBar
             columns={view === "email" ? EMAIL_COLUMNS : DOMAIN_COLUMNS}
             tags={tags}
+            imapServers={imapServers}
             state={view === "email" ? emailFilters : domainFilters}
             onChange={(next) => {
               if (view === "email") setEmailFilters(next);

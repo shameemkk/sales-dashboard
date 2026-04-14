@@ -1,7 +1,7 @@
 // Email Analyzer — filter model, column definitions, operators, serialization,
 // and a JS predicate evaluator used for post-aggregation (domain view) filtering.
 
-export type ColumnDataType = "string" | "number" | "tags";
+export type ColumnDataType = "string" | "number" | "tags" | "imap_server";
 export type FilterConjunction = "and" | "or";
 
 // "email"       -> row in email_performance table
@@ -54,7 +54,7 @@ export const EMPTY_FILTERS: FilterState = { conjunction: "and", rows: [] };
 export const EMAIL_COLUMNS: FilterColumn[] = [
   { id: "email", label: "Email", field: "email", dataType: "string", scope: "email" },
   { id: "domain", label: "Domain", field: "domain", dataType: "string", scope: "email" },
-  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "string", scope: "email" },
+  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "imap_server", scope: "email" },
   { id: "warmup_score", label: "Warmup Score", field: "warmup_score", dataType: "number", scope: "email" },
   { id: "reply_rate", label: "Reply Rate", field: "reply_rate", dataType: "number", scope: "email" },
   { id: "bounce_rate", label: "Bounce Rate", field: "bounce_rate", dataType: "number", scope: "email" },
@@ -64,7 +64,7 @@ export const EMAIL_COLUMNS: FilterColumn[] = [
 
 export const DOMAIN_COLUMNS: FilterColumn[] = [
   { id: "domain", label: "Domain", field: "domain", dataType: "string", scope: "domain-pre" },
-  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "string", scope: "domain-pre" },
+  { id: "imap_server", label: "IMAP Server", field: "imap_server", dataType: "imap_server", scope: "domain-pre" },
   { id: "totalEmails", label: "Total Emails", field: "totalEmails", dataType: "number", scope: "domain-post" },
   { id: "totalSent", label: "Emails Sent", field: "totalSent", dataType: "number", scope: "domain-post" },
   { id: "avgWarmupScore", label: "Avg Warmup Score", field: "avgWarmupScore", dataType: "number", scope: "domain-post" },
@@ -118,11 +118,19 @@ export const TAGS_OPERATORS: OperatorDef[] = [
   { id: "is_not_empty", label: "is not empty", hasInput: false },
 ];
 
+export const IMAP_SERVER_OPERATORS: OperatorDef[] = [
+  { id: "is_any_of", label: "is any of", hasInput: true },
+  { id: "is_none_of", label: "is none of", hasInput: true },
+  { id: "is_empty", label: "is empty", hasInput: false },
+  { id: "is_not_empty", label: "is not empty", hasInput: false },
+];
+
 export function getOperatorsForType(type: ColumnDataType): OperatorDef[] {
   switch (type) {
     case "string": return STRING_OPERATORS;
     case "number": return NUMBER_OPERATORS;
     case "tags": return TAGS_OPERATORS;
+    case "imap_server": return IMAP_SERVER_OPERATORS;
   }
 }
 
@@ -159,6 +167,9 @@ export function isFilterRowComplete(row: FilterRow, columns: FilterColumn[]): bo
     return typeof v === "string" && v.length > 0;
   }
   if (col.dataType === "tags") {
+    return Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === "string" && s.length > 0);
+  }
+  if (col.dataType === "imap_server") {
     return Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === "string" && s.length > 0);
   }
   return false;
@@ -200,6 +211,12 @@ export function serializeFilters(state: FilterState, columns: FilterColumn[]): U
       return;
     }
     if (col.dataType === "tags" && Array.isArray(row.value)) {
+      for (const name of row.value as string[]) {
+        params.append(`f[${i}][v][]`, name);
+      }
+      return;
+    }
+    if (col.dataType === "imap_server" && Array.isArray(row.value)) {
       for (const name of row.value as string[]) {
         params.append(`f[${i}][v][]`, name);
       }
@@ -257,6 +274,10 @@ export function parseFiltersFromParams(
         if (Number.isNaN(v1) || Number.isNaN(v2)) continue;
         value = [v1, v2];
       } else if (col.dataType === "tags") {
+        const names = searchParams.getAll(`f[${i}][v][]`).filter((s) => s.length > 0);
+        if (names.length === 0) continue;
+        value = names;
+      } else if (col.dataType === "imap_server") {
         const names = searchParams.getAll(`f[${i}][v][]`).filter((s) => s.length > 0);
         if (names.length === 0) continue;
         value = names;
@@ -347,6 +368,20 @@ export function evaluateRow(
     }
   }
 
+  if (col.dataType === "imap_server") {
+    // In email view, raw is a single string (or null).
+    // In domain view (aggregated), raw may be an array. Handle both gracefully.
+    const values: string[] = Array.isArray(raw)
+      ? (raw as string[])
+      : raw ? [String(raw)] : [];
+    const valuesLower = new Set(values.map((v) => v.toLowerCase()));
+    const want = (row.value as string[]) ?? [];
+    switch (row.operator) {
+      case "is_any_of":  return want.some((w) => valuesLower.has(w.toLowerCase()));
+      case "is_none_of": return !want.some((w) => valuesLower.has(w.toLowerCase()));
+    }
+  }
+
   return true;
 }
 
@@ -384,6 +419,11 @@ export function describeFilterRow(row: FilterRow, columns: FilterColumn[]): stri
     const preview = names.length <= 2 ? names.join(", ") : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
     return `${col.label} ${op.label} ${preview}`;
   }
+  if (col.dataType === "imap_server" && Array.isArray(row.value)) {
+    const names = row.value as string[];
+    const preview = names.length <= 2 ? names.join(", ") : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+    return `${col.label} ${op.label} ${preview}`;
+  }
   if (col.dataType === "string" && isMultiValueStringOp(row.operator) && Array.isArray(row.value)) {
     const items = row.value as string[];
     const preview = items.length <= 2 ? items.join(", ") : `${items.slice(0, 2).join(", ")} +${items.length - 2}`;
@@ -397,6 +437,7 @@ export function defaultValueForOperator(col: FilterColumn, op: OperatorDef): Fil
   if (op.isRange) return [0, 0];
   if (col.dataType === "number") return 0;
   if (col.dataType === "tags") return [];
+  if (col.dataType === "imap_server") return [];
   if (col.dataType === "string") return isMultiValueStringOp(op.id) ? [] : "";
   return null;
 }

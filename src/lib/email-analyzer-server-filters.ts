@@ -47,6 +47,19 @@ function rowToOrClauses(row: ParsedFilterRow, col: FilterColumn): string[] {
   // Tags in OR mode: complex JSONB `cs` inside .or() is fragile. Skip.
   if (col.dataType === "tags") return [];
 
+  if (col.dataType === "imap_server") {
+    const names = (row.value as string[]) ?? [];
+    switch (row.operator) {
+      case "is_any_of":
+        return names.map((n) => `${field}.eq.${escapeOrValue(n)}`);
+      case "is_none_of": {
+        const parts = names.map((n) => `not.${field}.eq.${escapeOrValue(n)}`);
+        return [`and(${parts.join(",")})`];
+      }
+    }
+    return [];
+  }
+
   switch (row.operator) {
     case "is_empty": return [`${field}.is.null`];
     case "is_not_empty": return [`not.${field}.is.null`];
@@ -151,6 +164,19 @@ function applyRowAnd(query: SbQuery, row: ParsedFilterRow, col: FilterColumn): S
       case "not_equals":  return query.neq(field, v);
       case "starts_with": return query.ilike(field, `${v}%`);
       case "ends_with":   return query.ilike(field, `%${v}`);
+    }
+  }
+
+  if (col.dataType === "imap_server") {
+    const names = (row.value as string[]) ?? [];
+    switch (row.operator) {
+      case "is_any_of":
+        return query.in(field, names);
+      case "is_none_of": {
+        // PostgREST "not in" syntax: .not(field, "in", "(val1,val2)")
+        const formatted = `(${names.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(",")})`;
+        return query.not(field, "in", formatted);
+      }
     }
   }
 

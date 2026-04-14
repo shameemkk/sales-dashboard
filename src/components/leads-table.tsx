@@ -680,6 +680,7 @@ export function LeadsTable() {
               <EmailAnalyzerFilterBar
                 columns={LEADS_COLUMNS}
                 tags={tagObjects}
+                imapServers={[]}
                 state={filterState}
                 onChange={(next) => { setFilterState(next); setPage(1); }}
               />
