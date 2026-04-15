@@ -159,6 +159,8 @@ export function EmailAnalyzerTable({
   const columns: { label: string; field: SortField | null; className?: string }[] = [
     { label: "Email", field: "email" },
     { label: "Domain", field: "domain" },
+    { label: "Status", field: null },
+    { label: "Warmup", field: null },
     { label: "IMAP Server", field: null },
     { label: "Warmup Score", field: "warmup_score" },
     { label: "Reply Rate", field: "reply_rate" },
@@ -225,6 +227,27 @@ export function EmailAnalyzerTable({
                   </TableCell>
                   <TableCell className="font-medium text-sm">{email.email}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{email.domain}</TableCell>
+                  <TableCell>
+                    {email.status ? (
+                      <Badge
+                        variant={email.status === "active" ? "default" : "secondary"}
+                        className="text-xs capitalize"
+                      >
+                        {email.status}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {email.warmupEnabled === null ? (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    ) : email.warmupEnabled ? (
+                      <Badge variant="default" className="text-xs bg-emerald-500 hover:bg-emerald-600">On</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs text-muted-foreground">Off</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{email.imapServer ?? "—"}</TableCell>
                   <TableCell><WarmupBar score={email.warmupScore} /></TableCell>
                   <TableCell><RateBar rate={email.replyRate} thresholds={{ green: 14, blue: 10, amber: 6 }} /></TableCell>

@@ -87,6 +87,7 @@ export async function GET(request: NextRequest) {
     warmupScore: Number(row.warmup_score),
     tags: row.tags ?? [],
     status: row.status,
+    warmupEnabled: row.warmup_enabled ?? null,
     syncedAt: row.synced_at,
   }));
 

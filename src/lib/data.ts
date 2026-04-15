@@ -90,6 +90,7 @@ export interface EmailPerformance {
   warmupScore: number;
   tags: Tag[];
   status: string | null;
+  warmupEnabled: boolean | null;
   syncedAt: string;
 }
 

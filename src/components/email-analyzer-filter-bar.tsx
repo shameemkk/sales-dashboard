@@ -40,11 +40,12 @@ interface Props {
   columns: FilterColumn[];
   tags: Tag[];
   imapServers: string[];
+  statuses: string[];
   state: FilterState;
   onChange(next: FilterState): void;
 }
 
-export function EmailAnalyzerFilterBar({ columns, tags, imapServers, state, onChange }: Props) {
+export function EmailAnalyzerFilterBar({ columns, tags, imapServers, statuses, state, onChange }: Props) {
   const [open, setOpen] = useState(false);
   // Local draft — edits stay here until Apply is clicked.
   const [draft, setDraft] = useState<FilterState>(
@@ -161,6 +162,7 @@ export function EmailAnalyzerFilterBar({ columns, tags, imapServers, state, onCh
                   columns={columns}
                   tags={tags}
                   imapServers={imapServers}
+                  statuses={statuses}
                   onChange={(patch) => updateRow(row.id, patch)}
                 />
 
@@ -206,10 +208,11 @@ interface RowEditorProps {
   columns: FilterColumn[];
   tags: Tag[];
   imapServers: string[];
+  statuses: string[];
   onChange(patch: Partial<FilterRow>): void;
 }
 
-function FilterRowEditor({ row, columns, tags, imapServers, onChange }: RowEditorProps) {
+function FilterRowEditor({ row, columns, tags, imapServers, statuses, onChange }: RowEditorProps) {
   const col = getColumnById(columns, row.columnId) ?? columns[0];
   const ops = getOperatorsForType(col.dataType);
   const opDef = getOperatorDef(col.dataType, row.operator) ?? ops[0];
@@ -281,7 +284,7 @@ function FilterRowEditor({ row, columns, tags, imapServers, onChange }: RowEdito
 
       {/* Value input */}
       <div className="flex-1 min-w-0 overflow-hidden">
-        <ValueInput row={row} col={col} opDef={opDef} tags={tags} imapServers={imapServers} onChange={onChange} />
+        <ValueInput row={row} col={col} opDef={opDef} tags={tags} imapServers={imapServers} statuses={statuses} onChange={onChange} />
       </div>
     </>
   );
@@ -295,10 +298,11 @@ interface ValueInputProps {
   opDef: { id: string; hasInput: boolean; isRange?: boolean };
   tags: Tag[];
   imapServers: string[];
+  statuses: string[];
   onChange(patch: Partial<FilterRow>): void;
 }
 
-function ValueInput({ row, col, opDef, tags, imapServers, onChange }: ValueInputProps) {
+function ValueInput({ row, col, opDef, tags, imapServers, statuses, onChange }: ValueInputProps) {
   if (!opDef.hasInput) {
     return <div className="text-xs text-muted-foreground italic px-2">—</div>;
   }
@@ -346,6 +350,10 @@ function ValueInput({ row, col, opDef, tags, imapServers, onChange }: ValueInput
 
   if (col.dataType === "imap_server") {
     return <ImapServerMultiPicker servers={imapServers} value={(row.value as string[]) ?? []} onChange={(v) => onChange({ value: v })} />;
+  }
+
+  if (col.dataType === "status") {
+    return <StatusMultiPicker statuses={statuses} value={(row.value as string[]) ?? []} onChange={(v) => onChange({ value: v })} />;
   }
 
   // String: multi-value chip input for contains / not_contains, plain input otherwise.
@@ -587,6 +595,79 @@ function TagMultiPicker({ tags, value, onChange }: TagPickerProps) {
               <span className="truncate">Add &quot;{search.trim()}&quot;</span>
             </button>
           )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------- Status multi-picker ----------
+
+interface StatusPickerProps {
+  statuses: string[];
+  value: string[];
+  onChange(next: string[]): void;
+}
+
+function StatusMultiPicker({ statuses, value, onChange }: StatusPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const selected = useMemo(() => new Set(value), [value]);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return statuses;
+    return statuses.filter((s) => s.toLowerCase().includes(q));
+  }, [statuses, search]);
+
+  function toggle(name: string) {
+    const next = new Set(selected);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    onChange([...next]);
+  }
+
+  const label =
+    value.length === 0
+      ? "Select statuses…"
+      : value.length === 1
+      ? value[0]
+      : `${value.length} statuses`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 w-full justify-start text-xs font-normal capitalize">
+          <span className="truncate">{label}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-48 p-0">
+        {statuses.length > 5 && (
+          <div className="p-2 border-b">
+            <Input
+              placeholder="Search statuses..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-sm"
+            />
+          </div>
+        )}
+        <div className="max-h-60 overflow-y-auto p-1">
+          {filtered.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-3">No statuses</p>
+          )}
+          {filtered.map((name) => (
+            <button
+              key={name}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-muted/50 cursor-pointer text-left min-w-0 capitalize"
+              onClick={() => toggle(name)}
+            >
+              <Check className={`size-3.5 shrink-0 ${selected.has(name) ? "opacity-100" : "opacity-0"}`} />
+              <span className="truncate flex-1">{name}</span>
+            </button>
+          ))}
         </div>
       </PopoverContent>
     </Popover>

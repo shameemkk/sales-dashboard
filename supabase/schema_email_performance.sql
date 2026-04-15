@@ -41,3 +41,6 @@ ALTER TABLE sync_execution_log ADD CONSTRAINT sync_execution_log_status_check
 
 -- Add imap_server column (nullable, idempotent)
 ALTER TABLE email_performance ADD COLUMN IF NOT EXISTS imap_server TEXT;
+
+-- Add warmup_enabled column (nullable boolean, idempotent)
+ALTER TABLE email_performance ADD COLUMN IF NOT EXISTS warmup_enabled BOOLEAN;

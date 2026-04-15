@@ -681,6 +681,7 @@ export function LeadsTable() {
                 columns={LEADS_COLUMNS}
                 tags={tagObjects}
                 imapServers={[]}
+                statuses={[]}
                 state={filterState}
                 onChange={(next) => { setFilterState(next); setPage(1); }}
               />

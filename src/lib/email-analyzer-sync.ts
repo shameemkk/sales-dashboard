@@ -178,6 +178,7 @@ export async function runEmailAnalyzerSync(jobId: number): Promise<void> {
           warmup_score: warmupScore,
           tags: Array.isArray(s.tags) ? s.tags : [],
           status: s.status ?? null,
+          warmup_enabled: typeof s.warmup_enabled === "boolean" ? s.warmup_enabled : null,
           imap_server: s.imap_server ?? null,
           synced_at: new Date().toISOString(),
         };

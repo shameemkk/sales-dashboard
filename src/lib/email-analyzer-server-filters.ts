@@ -47,7 +47,7 @@ function rowToOrClauses(row: ParsedFilterRow, col: FilterColumn): string[] {
   // Tags in OR mode: complex JSONB `cs` inside .or() is fragile. Skip.
   if (col.dataType === "tags") return [];
 
-  if (col.dataType === "imap_server") {
+  if (col.dataType === "imap_server" || col.dataType === "status") {
     const names = (row.value as string[]) ?? [];
     switch (row.operator) {
       case "is_any_of":
@@ -56,6 +56,14 @@ function rowToOrClauses(row: ParsedFilterRow, col: FilterColumn): string[] {
         const parts = names.map((n) => `not.${field}.eq.${escapeOrValue(n)}`);
         return [`and(${parts.join(",")})`];
       }
+    }
+    return [];
+  }
+
+  if (col.dataType === "boolean") {
+    switch (row.operator) {
+      case "is_true":  return [`${field}.eq.true`];
+      case "is_false": return [`${field}.eq.false`];
     }
     return [];
   }
@@ -167,7 +175,7 @@ function applyRowAnd(query: SbQuery, row: ParsedFilterRow, col: FilterColumn): S
     }
   }
 
-  if (col.dataType === "imap_server") {
+  if (col.dataType === "imap_server" || col.dataType === "status") {
     const names = (row.value as string[]) ?? [];
     switch (row.operator) {
       case "is_any_of":
@@ -177,6 +185,13 @@ function applyRowAnd(query: SbQuery, row: ParsedFilterRow, col: FilterColumn): S
         const formatted = `(${names.map((n) => `"${n.replace(/"/g, '\\"')}"`).join(",")})`;
         return query.not(field, "in", formatted);
       }
+    }
+  }
+
+  if (col.dataType === "boolean") {
+    switch (row.operator) {
+      case "is_true":  return query.eq(field, true);
+      case "is_false": return query.eq(field, false);
     }
   }
 

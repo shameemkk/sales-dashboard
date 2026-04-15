@@ -1,7 +1,7 @@
 // Email Analyzer — filter model, column definitions, operators, serialization,
 // and a JS predicate evaluator used for post-aggregation (domain view) filtering.
 
-export type ColumnDataType = "string" | "number" | "tags" | "imap_server";
+export type ColumnDataType = "string" | "number" | "tags" | "imap_server" | "boolean" | "status";
 export type FilterConjunction = "and" | "or";
 
 // "email"       -> row in email_performance table
@@ -60,6 +60,8 @@ export const EMAIL_COLUMNS: FilterColumn[] = [
   { id: "bounce_rate", label: "Bounce Rate", field: "bounce_rate", dataType: "number", scope: "email" },
   { id: "total_sent", label: "Sent", field: "total_sent", dataType: "number", scope: "email" },
   { id: "tags", label: "Tags", field: "tags", dataType: "tags", scope: "email" },
+  { id: "status", label: "Status", field: "status", dataType: "status", scope: "email" },
+  { id: "warmup_enabled", label: "Warmup Enabled", field: "warmup_enabled", dataType: "boolean", scope: "email" },
 ];
 
 export const DOMAIN_COLUMNS: FilterColumn[] = [
@@ -125,12 +127,28 @@ export const IMAP_SERVER_OPERATORS: OperatorDef[] = [
   { id: "is_not_empty", label: "is not empty", hasInput: false },
 ];
 
+export const BOOLEAN_OPERATORS: OperatorDef[] = [
+  { id: "is_true", label: "is enabled", hasInput: false },
+  { id: "is_false", label: "is disabled", hasInput: false },
+  { id: "is_empty", label: "is empty", hasInput: false },
+  { id: "is_not_empty", label: "is not empty", hasInput: false },
+];
+
+export const STATUS_OPERATORS: OperatorDef[] = [
+  { id: "is_any_of",    label: "is any of",    hasInput: true },
+  { id: "is_none_of",   label: "is none of",   hasInput: true },
+  { id: "is_empty",     label: "is empty",     hasInput: false },
+  { id: "is_not_empty", label: "is not empty", hasInput: false },
+];
+
 export function getOperatorsForType(type: ColumnDataType): OperatorDef[] {
   switch (type) {
-    case "string": return STRING_OPERATORS;
-    case "number": return NUMBER_OPERATORS;
-    case "tags": return TAGS_OPERATORS;
+    case "string":      return STRING_OPERATORS;
+    case "number":      return NUMBER_OPERATORS;
+    case "tags":        return TAGS_OPERATORS;
     case "imap_server": return IMAP_SERVER_OPERATORS;
+    case "boolean":     return BOOLEAN_OPERATORS;
+    case "status":      return STATUS_OPERATORS;
   }
 }
 
@@ -169,8 +187,11 @@ export function isFilterRowComplete(row: FilterRow, columns: FilterColumn[]): bo
   if (col.dataType === "tags") {
     return Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === "string" && s.length > 0);
   }
-  if (col.dataType === "imap_server") {
+  if (col.dataType === "imap_server" || col.dataType === "status") {
     return Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === "string" && s.length > 0);
+  }
+  if (col.dataType === "boolean") {
+    return true; // all boolean operators have no input
   }
   return false;
 }
@@ -216,7 +237,7 @@ export function serializeFilters(state: FilterState, columns: FilterColumn[]): U
       }
       return;
     }
-    if (col.dataType === "imap_server" && Array.isArray(row.value)) {
+    if ((col.dataType === "imap_server" || col.dataType === "status") && Array.isArray(row.value)) {
       for (const name of row.value as string[]) {
         params.append(`f[${i}][v][]`, name);
       }
@@ -277,7 +298,7 @@ export function parseFiltersFromParams(
         const names = searchParams.getAll(`f[${i}][v][]`).filter((s) => s.length > 0);
         if (names.length === 0) continue;
         value = names;
-      } else if (col.dataType === "imap_server") {
+      } else if (col.dataType === "imap_server" || col.dataType === "status") {
         const names = searchParams.getAll(`f[${i}][v][]`).filter((s) => s.length > 0);
         if (names.length === 0) continue;
         value = names;
@@ -368,7 +389,7 @@ export function evaluateRow(
     }
   }
 
-  if (col.dataType === "imap_server") {
+  if (col.dataType === "imap_server" || col.dataType === "status") {
     // In email view, raw is a single string (or null).
     // In domain view (aggregated), raw may be an array. Handle both gracefully.
     const values: string[] = Array.isArray(raw)
@@ -379,6 +400,13 @@ export function evaluateRow(
     switch (row.operator) {
       case "is_any_of":  return want.some((w) => valuesLower.has(w.toLowerCase()));
       case "is_none_of": return !want.some((w) => valuesLower.has(w.toLowerCase()));
+    }
+  }
+
+  if (col.dataType === "boolean") {
+    switch (row.operator) {
+      case "is_true":  return raw === true;
+      case "is_false": return raw === false;
     }
   }
 
@@ -419,7 +447,7 @@ export function describeFilterRow(row: FilterRow, columns: FilterColumn[]): stri
     const preview = names.length <= 2 ? names.join(", ") : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
     return `${col.label} ${op.label} ${preview}`;
   }
-  if (col.dataType === "imap_server" && Array.isArray(row.value)) {
+  if ((col.dataType === "imap_server" || col.dataType === "status") && Array.isArray(row.value)) {
     const names = row.value as string[];
     const preview = names.length <= 2 ? names.join(", ") : `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
     return `${col.label} ${op.label} ${preview}`;
@@ -437,7 +465,8 @@ export function defaultValueForOperator(col: FilterColumn, op: OperatorDef): Fil
   if (op.isRange) return [0, 0];
   if (col.dataType === "number") return 0;
   if (col.dataType === "tags") return [];
-  if (col.dataType === "imap_server") return [];
+  if (col.dataType === "imap_server" || col.dataType === "status") return [];
+  if (col.dataType === "boolean") return null;
   if (col.dataType === "string") return isMultiValueStringOp(op.id) ? [] : "";
   return null;
 }
